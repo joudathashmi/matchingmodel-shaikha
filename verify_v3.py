@@ -97,16 +97,23 @@ def main():
             opps.iloc[j]["Sector"])
         dev_sector = max(dev_sector, abs(v3.sector_similarity(c_node, o_node)
                                          - float(r.sector_similarity)))
-        dev_sem_p = max(dev_sem_p, abs(float(sem_p[i, j]) - float(r.profile_similarity)))
-        dev_sem_q = max(dev_sem_q, abs(float(sem_q[i, j]) - float(r.product_similarity)))
+        # raw percentile blend is calibrated by business model + product evidence
+        c_bm = str(ce.get("business_model", "") or "")
+        o_bm = str(oe.get("business_model_needed", "") or "")
+        ev_level = v3.product_evidence_level(str(oe.get("end_product", "") or ""),
+                                             ce.get("evidenced_products") or [])
+        cal_p = v3.calibrate_profile_similarity(float(sem_p[i, j]), c_bm, o_bm)
+        cal_q = v3.calibrate_product_similarity(float(sem_q[i, j]), c_bm, ev_level)
+        dev_sem_p = max(dev_sem_p, abs(cal_p - float(r.profile_similarity)))
+        dev_sem_q = max(dev_sem_q, abs(cal_q - float(r.product_similarity)))
         vc = v3.value_chain_score(oe.get("required_roles", []) or [],
                                   ce.get("value_chain_role", ""),
                                   ce.get("secondary_role", ""))
         dev_vc = max(dev_vc, abs(vc - float(r.value_chain_score)))
 
     results[f"1. sector_similarity recomputed ({n_checked} rows, max dev {dev_sector:.4f})"] = dev_sector <= EPS
-    results[f"2a. profile_similarity recomputed (max dev {dev_sem_p:.4f})"] = dev_sem_p <= EPS
-    results[f"2b. product_similarity recomputed (max dev {dev_sem_q:.4f})"] = dev_sem_q <= EPS
+    results[f"2a. profile_similarity recomputed w/ business-model cap (max dev {dev_sem_p:.4f})"] = dev_sem_p <= EPS
+    results[f"2b. product_similarity recomputed w/ role-band calibration (max dev {dev_sem_q:.4f})"] = dev_sem_q <= EPS
     results[f"3. value_chain_score recomputed (max dev {dev_vc:.4f})"] = dev_vc <= EPS
 
     # ---- layer 4: score composition and legal penalty products ----
@@ -151,13 +158,30 @@ def main():
         light = (int(agree.split("/")[1]) <= 1 if "/" in agree
                  else int(lab.get("votes", 3)) <= 1)
         expect = v3.decide(float(r.final_score), lab["decision"], hv, True, light=light)
+        # evidence guards (audit fixes): re-derive the demotions the engine
+        # applies after the base decision.
+        i = ci.get(r.company_name)
+        ce = comp_enrich.get(r.company_name, {})
+        oe = opp_enrich.get(r.opportunity_name, {})
+        ev_level = v3.product_evidence_level(
+            str(oe.get("end_product", "") or ""),
+            ce.get("evidenced_products") or [])
+        comp_len = (len(str(companies.iloc[i]["company_profile"]))
+                    + len(str(companies.iloc[i]["product and Services"])))
+        conf = int(str(r.confidence_score).split()[0])
+        expect, exp_flags = v3.apply_evidence_guards(
+            expect, conf, float(r.sector_similarity), ev_level, comp_len, hv)
         n_dec += 1
-        if expect != r.decision:
+        # group_sibling_demoted is a ranking flag, not an evidence guard
+        file_flags = ";".join(f for f in str(getattr(r, "evidence_flag", "") or "").split(";")
+                              if f and f != "group_sibling_demoted")
+        if expect != r.decision or ";".join(exp_flags) != file_flags:
             n_dec_bad += 1
             if len(examples) < 4:
                 examples.append(f"{r.company_name}->{r.opportunity_name}: "
-                                f"file {r.decision} vs derived {expect}")
-    results[f"5. decision re-derived from gate+human ({n_dec} rows, {n_dec_bad} mismatches, {n_dec_missing} unlabeled)"] = (n_dec_bad == 0 and n_dec > 0)
+                                f"file {r.decision} [{file_flags}] vs derived "
+                                f"{expect} [{';'.join(exp_flags)}]")
+    results[f"5. decision + evidence guards re-derived ({n_dec} rows, {n_dec_bad} mismatches, {n_dec_missing} unlabeled)"] = (n_dec_bad == 0 and n_dec > 0)
     for e in examples:
         print("   decision mismatch:", e)
 
@@ -172,17 +196,32 @@ def main():
                  if st[r.opportunity_id] != r.opportunity_status)
     results[f"6. match_type + opportunity_status recomputed ({mt_bad}+{st_bad} mismatches)"] = mt_bad == 0 and st_bad == 0
 
-    # ---- layer 7: rank = per-opportunity priority (tier, then score) ----
+    # ---- layer 7: rank = per-opportunity priority (sibling-demotion, then
+    # tier, then score). Group siblings after the family's best row must sink
+    # below all unaffiliated candidates and carry the group_sibling_demoted
+    # flag; everything else orders by tier-then-score. ----
     tidx = {t: k for k, t in enumerate(v3.TIER_ORDER)}
     rank_ok = True
     for _, g in out.groupby("opportunity_id"):
         g = g.sort_values("rank")
         if sorted(g["rank"]) != list(range(1, len(g) + 1)):
             rank_ok = False
-        keys = [(tidx[d], -f) for d, f in zip(g["decision"], g["final_score"])]
+        gg = g.copy()
+        gg["_t"] = gg["decision"].map(tidx)
+        base = gg.sort_values(["_t", "final_score"], ascending=[True, False],
+                              kind="mergesort")
+        dup = ((base["corporate_group"] != "")
+               & base.duplicated(["corporate_group"]))
+        exp_dup = dict(zip(base["company_name"], dup))
+        for r in gg.itertuples():
+            flagged = "group_sibling_demoted" in str(getattr(r, "evidence_flag", ""))
+            if flagged != bool(exp_dup.get(r.company_name)):
+                rank_ok = False
+        keys = [(bool(exp_dup.get(c)), tidx[d], -f)
+                for c, d, f in zip(g["company_name"], g["decision"], g["final_score"])]
         if keys != sorted(keys):
             rank_ok = False
-    results["7. rank = tier-then-score priority, contiguous per opportunity"] = rank_ok
+    results["7. rank = sibling-demotion, tier, score priority, contiguous per opportunity"] = rank_ok
 
     # ---- report ----
     print("\n" + "=" * 76)
@@ -208,7 +247,8 @@ def main():
               f"opportunity node '{oe.get('normalized_sector')}' "
               f"-> similarity {r['sector_similarity']}")
         print(f"  embeddings ({mode}): raw cosines {sim_p[i, j]:.3f}/{sim_q[i, j]:.3f} "
-              f"-> percentile+specificity {r['profile_similarity']}/{r['product_similarity']}")
+              f"-> calibrated (business model '{ce.get('business_model', '?')}') "
+              f"{r['profile_similarity']}/{r['product_similarity']}")
         print(f"  value chain: role '{ce.get('value_chain_role')}' vs needs "
               f"{oe.get('required_roles')} -> {r['value_chain_score']} (informational)")
         print(f"  score: {w['sector']:.3f}x{r['sector_similarity']} + "
