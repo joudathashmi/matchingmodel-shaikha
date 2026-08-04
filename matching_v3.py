@@ -36,9 +36,11 @@ analyst overrides, drift-instrumented labels) and adds:
      weighs evidence quality (High >=80 needs strong public evidence).
 
 Usage:
-  python3 matching_v3.py                     # full run -> Output/matching_output_v3.csv
+  python3 matching_v3.py                     # DB Company/Opportunity → MatchingOutput
+  python3 matching_v3.py --source excel      # legacy Excel files
   python3 matching_v3.py --no-narratives     # scores + decisions only (fast)
   python3 matching_v3.py --weights my.json   # override scoring weights
+  python3 matching_v3.py --limit-companies 50 --limit-opportunities 20
 """
 from __future__ import annotations
 
@@ -83,18 +85,23 @@ TAXONOMY = {
     "healthcare": {"pharmaceutical manufacturing", "biotechnology",
                    "medical devices", "healthcare services"},
     "energy": {"oil & gas", "power generation", "renewables", "utilities",
-               "water"},
+               "water", "environment services", "waste management",
+               "water treatment"},
     "chemicals": {"industrial chemicals", "specialty chemicals",
                   "petrochemicals"},
     "mining": {"mining & minerals", "metals"},
+    "tourism": {"hospitality", "tourism services", "entertainment"},
+    "financial": {"banking", "capital markets", "insurance", "fintech"},
 }
 LEAF_TO_FAMILY = {leaf: fam for fam, leaves in TAXONOMY.items() for leaf in leaves}
 ALL_LEAVES = sorted(LEAF_TO_FAMILY) + sorted(TAXONOMY)
 
 SECTOR_SYNONYMS = {
     "industrial manufacturing": "industrial manufacturing",
+    "industrial & logistics": "industrial manufacturing",
     "general industry": "industrial",
     "engineering & construction": "engineering & construction",
+    "engineering": "engineering & construction",
     "ict": "ict",
     "ict hardware": "ict hardware",
     "information and communication technology": "ict",
@@ -104,35 +111,53 @@ SECTOR_SYNONYMS = {
     "pharmaceutical": "pharmaceutical manufacturing",
     "pharmaceutical manufacturing": "pharmaceutical manufacturing",
     "pharma": "pharmaceutical manufacturing",
+    "pharma & biotech": "pharmaceutical manufacturing",
     "biotechnology": "biotechnology",
     "healthcare": "healthcare",
     "healthcare and life sciences": "healthcare",
+    "healthcare & life sciences": "healthcare",
     "oil, gas, energy & water": "energy",
     "oil & gas": "oil & gas",
     "energy": "energy",
+    "environment services": "environment services",
+    "environmental services": "environment services",
+    "waste management": "waste management",
+    "water treatment": "water treatment",
     "mining": "mining & minerals",
     "chemicals": "industrial chemicals",
+    "tourism & quality of life & hospitality": "tourism",
+    "tourism": "tourism",
+    "hospitality": "hospitality",
+    "financial services": "financial",
+    "banking": "banking",
 }
 
 # symmetric cross-family investment affinity (industrial firms plausibly extend
 # into ICT hardware assembly; chemicals feed pharma; etc.)
+# Audit D3 (2026-07-28): lowered energy↔industrial so water contractors do not
+# score as sector-identical to every industrial/environment pairing.
 FAMILY_AFFINITY = {
     frozenset(("industrial", "ict")): 0.45,
     frozenset(("industrial", "healthcare")): 0.35,
-    frozenset(("industrial", "energy")): 0.45,
+    frozenset(("industrial", "energy")): 0.30,
     frozenset(("industrial", "chemicals")): 0.40,
     frozenset(("industrial", "mining")): 0.40,
     frozenset(("chemicals", "healthcare")): 0.55,
-    frozenset(("energy", "chemicals")): 0.50,
+    frozenset(("energy", "chemicals")): 0.40,
     frozenset(("ict", "healthcare")): 0.40,
     frozenset(("mining", "chemicals")): 0.40,
-    frozenset(("mining", "energy")): 0.45,
-    frozenset(("ict", "energy")): 0.30,
-    frozenset(("energy", "healthcare")): 0.20,
+    frozenset(("mining", "energy")): 0.35,
+    frozenset(("ict", "energy")): 0.25,
+    frozenset(("energy", "healthcare")): 0.15,
     frozenset(("ict", "chemicals")): 0.20,
     frozenset(("mining", "ict")): 0.15,
     frozenset(("mining", "healthcare")): 0.15,
     frozenset(("mining", "industrial")): 0.40,
+    frozenset(("tourism", "industrial")): 0.15,
+    frozenset(("tourism", "energy")): 0.10,
+    frozenset(("tourism", "healthcare")): 0.20,
+    frozenset(("financial", "ict")): 0.40,
+    frozenset(("financial", "industrial")): 0.15,
 }
 BASE_CROSS_FAMILY = 0.10
 
@@ -150,6 +175,27 @@ def normalize_sector_label(raw: str) -> str:
 
 def _family(node: str) -> str:
     return node if node in TAXONOMY else LEAF_TO_FAMILY.get(node, "")
+
+
+def resolve_sector_node(raw: str, enriched: str = "") -> str:
+    """Prefer a taxonomy mapping from the raw sector label when enrichment
+    collapses distinct sectors onto one node (audit D3). Same-family leaves
+    stay distinct so Oil & Gas vs Environment Services scores 0.65, not 1.0."""
+    raw_n = normalize_sector_label(raw)
+    enriched_n = (enriched or "").strip().lower()
+    if enriched_n in LEAF_TO_FAMILY or enriched_n in TAXONOMY:
+        if not raw_n:
+            return enriched_n
+        if _family(raw_n) == _family(enriched_n):
+            if raw_n in TAXONOMY and enriched_n in LEAF_TO_FAMILY:
+                return enriched_n
+            if enriched_n in TAXONOMY and raw_n in LEAF_TO_FAMILY:
+                return raw_n
+            if raw_n in LEAF_TO_FAMILY:
+                return raw_n
+            return enriched_n
+        return raw_n
+    return raw_n or enriched_n or ""
 
 
 def sector_similarity(node_a: str, node_b: str) -> float:
@@ -272,12 +318,12 @@ BM_CLOSE = {
 
 def business_model_cap(company_bm: str, needed_bm: str) -> float:
     """Ceiling on profile_similarity from business-model compatibility.
-    1.0 only when the models are identical; unknown models cannot be verified
-    as a perfect match, so they cap below it."""
+    Identical models cap at 0.85 — BM match alone cannot unlock a perfect
+    profile score (audit D2). Unknown models cannot be verified as a match."""
     if not company_bm or not needed_bm:
         return 0.70
     if company_bm == needed_bm:
-        return 1.00
+        return 0.85
     return BM_CLOSE.get(frozenset((company_bm, needed_bm)), 0.40)
 
 
@@ -289,12 +335,63 @@ _GENERIC_TOKENS = {
     "solution", "services", "service", "kits", "kit", "units", "unit",
     "smart", "advanced", "commercial", "industrial", "integration",
     "technology", "technologies", "grade", "high", "quality",
+    "localized", "localization", "local", "partial", "portable",
+}
+
+# Category nouns that define a product family. Matching any of these between
+# end_product and an evidenced line is enough for family evidence; covering
+# all of them on one evidenced line is exact (audit M1).
+_CATEGORY_NOUNS = {
+    "vaccine", "glove", "catheter", "toothpaste", "ultrasound", "syringe",
+    "endoscope", "dressing", "implant", "stent", "pacemaker", "insulin",
+    "desalination", "filtration", "wastewater", "sewage", "recycling",
+    "battery", "semiconductor", "turbine", "reactor", "sensor", "actuator",
+    "robot", "robotics", "banking", "fintech", "cdn", "cloud", "storage",
+    "learning", "lms", "diagnostic", "reagent", "api", "biologic",
+    "biologics", "injectable", "anesthesia", "infusion", "pump", "lens",
+    "contact", "glove", "nitrile", "latex",
+}
+
+# Alias map applied after light stemming (plurals → singular).
+_TOKEN_ALIASES = {
+    "vaccines": "vaccine", "glove": "glove", "gloves": "glove",
+    "catheters": "catheter", "syringes": "syringe", "endoscopes": "endoscope",
+    "dressings": "dressing", "implants": "implant", "stents": "stent",
+    "batteries": "battery", "sensors": "sensor", "actuators": "actuator",
+    "robots": "robot", "lenses": "lens", "pumps": "pump", "apis": "api",
+    "reagents": "reagent", "diagnostics": "diagnostic", "turbines": "turbine",
+    "reactors": "reactor", "biologic": "biologic", "biologics": "biologic",
+    "injectables": "injectable", "toothpastes": "toothpaste",
+    "ultrasounds": "ultrasound", "wastewaters": "wastewater",
+    "nitrile": "glove", "latex": "glove",  # glove material → glove family
+    # Well-known brand lines → category (audit M1 brand→category gaps)
+    "sensodyne": "toothpaste", "parodontax": "toothpaste", "polident": "toothpaste",
+    "colgate": "toothpaste", "aquafresh": "toothpaste", "oralb": "toothpaste",
 }
 
 
+def _stem_token(tok: str) -> str:
+    """Light English plural stem + category aliases (audit M1)."""
+    t = _TOKEN_ALIASES.get(tok, tok)
+    if t in _TOKEN_ALIASES:
+        t = _TOKEN_ALIASES[t]
+    if t.endswith("ies") and len(t) > 4:
+        t = t[:-3] + "y"
+    elif t.endswith("ses") and len(t) > 4:
+        t = t[:-2]
+    elif t.endswith("s") and not t.endswith("ss") and len(t) > 3:
+        t = t[:-1]
+    return _TOKEN_ALIASES.get(t, t)
+
+
 def _sig_tokens(text: str) -> set:
-    return {t for t in re.findall(r"[a-z0-9]+", str(text or "").lower())
-            if len(t) > 2 and t not in _GENERIC_TOKENS}
+    raw = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    out = set()
+    for t in raw:
+        if len(t) <= 2 or t in _GENERIC_TOKENS:
+            continue
+        out.add(_stem_token(t))
+    return out
 
 
 def product_evidence_level(end_product: str, evidenced_products: list) -> int:
@@ -304,10 +401,15 @@ def product_evidence_level(end_product: str, evidenced_products: list) -> int:
       1 = same family: substantial overlap (a directly supporting subsystem
           or the same product category)
       0 = no evidenced relation (the products may still be enabling inputs)
-    Inference is never enough - only named products count."""
+    Inference is never enough - only named products count.
+
+    Audit M1: tokens are singularized and category nouns (vaccine/glove/…)
+    grant family/exact credit even when brand names dominate the product line.
+    """
     need = _sig_tokens(end_product)
     if not need:
         return 0
+    need_cat = need & _CATEGORY_NOUNS
     best = 0
     for prod in evidenced_products or []:
         have = _sig_tokens(prod)
@@ -316,10 +418,16 @@ def product_evidence_level(end_product: str, evidenced_products: list) -> int:
         inter = len(need & have)
         cov_need = inter / len(need)
         cov_min = inter / min(len(need), len(have))
+        have_cat = have & _CATEGORY_NOUNS
+        # Category-noun coverage: all required category nouns on one line → exact
+        if need_cat and need_cat <= have:
+            return 2
         if cov_need >= 0.99 or (inter >= 2 and cov_need >= 0.6):
             return 2
-        if cov_need >= 0.34 or (inter >= 2 and cov_min >= 0.6):
-            best = 1
+        if need_cat & have_cat:
+            best = max(best, 1)
+        if cov_need >= 0.30 or (inter >= 2 and cov_min >= 0.6):
+            best = max(best, 1)
     return best
 
 
@@ -353,7 +461,7 @@ def calibrate_product_similarity(raw: float, business_model: str,
 # run found ~45% of rows tied exactly at their cap value, destroying the
 # ordering information the semantic score carries.
 PROFILE_BANDS = {
-    1.00: (0.25, 1.00),  # identical business model
+    0.85: (0.25, 0.85),  # identical business model (audit D2: was 1.00)
     0.80: (0.20, 0.80),  # closely related
     0.70: (0.10, 0.70),  # unknown/unclassified
     0.60: (0.15, 0.60),  # partially aligned
@@ -379,18 +487,97 @@ def calibrate_profile_similarity(raw: float, company_bm: str,
 _GROUP_STOPWORDS = {
     # legal / corporate
     "gmbh", "limited", "companies", "company", "corporation", "holding",
-    "holdings", "group", "incorporated",
+    "holdings", "group", "incorporated", "ltd", "llc", "plc", "inc", "corp",
+    "private", "public", "anonim", "anonima", "aktiengesellschaft", "ag",
+    "sa", "nv", "bv", "co", "pty", "pvt",
+    # German / Romance legal forms (incl. mojibake splits of beschränkter)
+    "gesellschaft", "haftung", "beschrankter", "beschrnkter", "beschr",
+    "nkter", "mit", "und", "der", "des", "sociedad", "limitada", "responsabilidad",
+    "anonima", "societe", "anonyme", "besloten", "vennootschap",
     # generic industry words
     "industries", "industrial", "industry", "international", "engineering",
     "manufacture", "manufacturing", "equipment", "electric", "electrical",
-    "electronics", "cable", "cables", "power", "energy", "technology",
+    "electronics", "cable", "cables", "power",     "energy", "technology",
     "technologies", "solutions", "systems", "factory", "works", "automation",
     "controls", "development", "economic", "trading", "services", "general",
     "advanced", "motors", "machinery", "mechanical", "precision",
-    # geography
+    "utilities", "utility",
+    "pharma", "pharmaceutical", "pharmaceuticals", "chemical", "chemicals",
+    "medical", "healthcare", "health", "financial", "finance", "banking",
+    "insurance", "construction", "consulting", "consultancy", "consultants",
+    "capital", "investment", "investments", "media", "entertainment",
+    "education", "communications", "logistics", "aviation", "aerospace",
+    "automobile", "motor", "motors", "steel", "petroleum", "business",
+    "partners", "partner", "associates", "association", "institute",
+    "university", "college", "academy", "global", "worldwide", "national",
+    "security", "software", "digital", "design", "architecture", "architects",
+    "hotels", "hospitality", "shipping", "telecom", "semiconductor",
+    # common nouns that formed false families on the DB run (audit D4)
+    "water", "fluid", "trent", "modern", "control", "railway", "science",
+    "sciences", "black", "cloud", "instruments", "laboratories", "laboratory",
+    "north", "south", "west", "eastern", "western", "center", "centre",
+    "board", "asset", "assurance", "agency", "aircraft", "airways", "brands",
+    "building", "bureau", "commercial", "computer", "creative", "credit",
+    "defense", "delivery", "dental", "devices", "drilling", "economics",
+    "electronic", "elite", "enterprise", "enterprises", "estate", "events",
+    "excellence", "exchange", "executive", "export", "express", "fidelity",
+    "foods", "forwarding", "future", "groupe", "guardian", "horizon",
+    "human", "information", "integrated", "integrity", "intelligence",
+    "lines", "machine", "marine", "maritime", "marketing", "material",
+    "materials", "medicine", "metro", "micro", "mobile", "mobility",
+    "monitor", "mountain", "mutual", "networks", "nuclear", "ocean",
+    "office", "offshore", "oilfield", "packaging", "paints", "payment",
+    "people", "perfect", "petrochemical", "phoenix", "press", "productions",
+    "professional", "progressive", "projects", "property", "protection",
+    "pumps", "quality", "research", "resorts", "resources", "robotics",
+    "rubber", "safety", "savunma", "sharp", "smart", "sociedad", "solution",
+    "sports", "staffing", "standard", "state", "stock", "store", "strategic",
+    "strategy", "student", "studios", "summit", "swiss", "system", "talent",
+    "technical", "therapeutics", "tires", "tobacco", "towers", "travel",
+    "trinity", "truck", "trust", "tubes", "tyres", "union", "valves",
+    "venture", "venue", "vision", "abstract", "access", "accuracy",
+    # shared brand/common tokens that are not one corporate family
+    "logic", "aspen", "stanley", "arzneimittel", "pharmacare",
+    "telecommunications", "accreditation", "aktiebolag", "arthur", "asian",
+    "bankasi", "turkiye", "continuing", "graduate",
+    "berkeley", "berlin", "construcciones", "constructions", "council",
+    "examiners", "import", "innovations", "little", "lectricit",
+    "advisory", "alibaba", "alpha", "amazon", "appliances", "applied",
+    "assessment", "atomic", "atlas", "baker", "banco", "baykar", "berhad",
+    "biotec", "boost", "boston", "british", "caltex", "cambridge", "canon",
+    "canvas", "carbon", "cengage", "centers", "central", "chartered",
+    "chevron", "cirrus", "classin", "coaching", "compa", "compagnie",
+    "compass", "consolidated", "contracting", "cooper", "corporate", "crane",
+    "crown", "cultural", "daniel", "dassault", "deloitte", "delta",
+    "deutschland", "diehl", "dominion", "doosan", "dornier", "douglas",
+    "eastman", "eaton", "electronica", "elektronik", "energia", "engines",
+    "farmaceutici", "ferrer", "filtrasyon", "fitch", "flowserve", "franklin",
+    "fresenius", "gartner", "geely", "graduate", "grumman", "grupo",
+    "guangxi", "haichang", "hanwha", "hatch", "havas", "helicopters",
+    "higher", "hitachi", "hogan", "hughes", "hutchison", "hyosung", "hyundai",
+    "imperial", "industrie", "insaat", "intco", "intercontinental", "jacobs",
+    "james", "johnson", "jones", "kawasaki", "kerry", "kiewit", "kingsbury",
+    "kintetsu", "kluwer", "knowledge", "kraft", "laboratoires", "leadership",
+    "legal", "lexisnexis", "lloyd", "louis", "mahindra", "martin",
+    "massachusetts", "maxar", "merck", "merrill", "midea", "mitsui", "moody",
+    "morgan", "nagel", "nanoz", "nasional", "nielsen", "nihon", "nikkiso",
+    "nobel", "novartis", "oculus", "ogilvy", "oracle", "orange", "oshkosh",
+    "oxford", "pacific", "panasonic", "parker", "penta", "perkins", "philips",
+    "phillips", "posco", "poste", "prudential", "prysmian", "rainbow",
+    "reinhausen", "reinsurance", "reliance", "rheinmetall", "richard",
+    "robert", "robinson", "rockwell", "roland", "sailun", "samsung", "sanofi",
+    "schneider", "scientific", "shell", "siemens", "skillsoft", "statron",
+    "strabag", "sutherland", "swire", "takeda", "tarek", "tetra", "textron",
+    "torishima", "toyota", "turner", "veritas", "volvo", "washington",
+    "western", "white", "williams", "yokohama",
+    # geography / common place words
     "saudi", "arabia", "arabian", "china", "canada", "austria", "germany",
     "jeddah", "riyadh", "middle", "east", "gulf", "europe", "european",
     "asia", "zhejiang", "jiangsu", "shanghai", "wuhan", "emirates",
+    "australia", "america", "american", "africa", "india", "indian",
+    "japan", "korea", "france", "italy", "italia", "spain", "belgium",
+    "switzerland", "singapore", "taiwan", "egypt", "london", "beijing",
+    "shenzhen", "xiamen", "zhuhai",
 }
 
 
@@ -399,17 +586,27 @@ def detect_corporate_groups(names) -> dict:
     distinctive name token (e.g. 'Namag China' / 'Zhejiang NAMAG Equipment
     Manufacturing' / 'Whiting Equipment Canada / Namag' -> 'Namag'). Groups
     are MARKED, not merged: regional entities of one family may genuinely be
-    separate counterparts, but a shortlist should show they are one group."""
+    separate counterparts, but a shortlist should show they are one group.
+
+    On large universes a frequency cap is required: tokens shared by more than
+    a handful of companies ('Global', 'Pharmaceuticals', 'Consulting') are
+    sector/legal words, not corporate families.
+    """
     from collections import defaultdict
+    names = list(names)
     tok2names = defaultdict(set)
     for n in names:
         for t in re.findall(r"[a-z0-9]+", str(n).lower()):
             if len(t) >= 5 and t not in _GROUP_STOPWORDS:
                 tok2names[t].add(n)
+    # Cap: real families in this registry are small (Namag=3, Statron=2).
+    # Anything larger is almost always a shared industry/geo word.
+    # Audit D4: tightened from 6 → 4 after Water/Fluid/Trent false families.
+    max_members = 4
     groups = {}
     for t in sorted(tok2names):
         members = tok2names[t]
-        if len(members) >= 2:
+        if 2 <= len(members) <= max_members:
             for n in members:
                 groups.setdefault(n, t.capitalize())
     return groups
@@ -476,8 +673,10 @@ def compute_penalties(sector_sim, profile_sem, product_sem, vc_score,
     return factor, [name for name, _ in penalties]
 
 
-TIERS = [(0.72, "Excellent Match"), (0.60, "Strong Match"), (0.50, "Good Match"),
-         (0.38, "Potential Match"), (0.26, "Weak Match"), (0.0, "Poor Match")]
+# Raised thresholds for the large DB universe (audit D1, 2026-07-28): the
+# previous 0.72 Excellent cut put almost every gate-approved pair in Excellent.
+TIERS = [(0.80, "Excellent Match"), (0.68, "Strong Match"), (0.55, "Good Match"),
+         (0.42, "Potential Match"), (0.28, "Weak Match"), (0.0, "Poor Match")]
 TIER_ORDER = [t for _, t in TIERS]
 
 VETTED_TIERS = ("Excellent Match", "Strong Match", "Good Match")
@@ -489,21 +688,24 @@ BUILDER_ROLES = ("OEM", "Contract Manufacturer", "System Integrator",
 
 
 def match_type(decision: str, vc_score: float, loc_model: str,
-               role: str = "") -> str:
+               role: str = "", ev_level: int = 0,
+               required_roles: list | None = None) -> str:
     """What KIND of lead this is - the label an IPA actually acts on.
 
-    'Excellent/Strong Match' says how good the fit is; match_type says what
-    the fit IS. The company's value-chain ROLE is the primary discriminator
-    (an independent review found the previous threshold-only version collapsed
-    to 'JV partner' for nearly every vetted row): supplier-type roles are
-    supplier-localization plays regardless of ambition, builder-type roles are
-    JV material, and anchor still demands role-exact fit plus an Excellent
-    verdict. Derived deterministically so the verifier can recompute it."""
+    Audit D6: Anchor requires Excellent + role-exact VC fit + product evidence
+    level ≥ 1 + company role matching a primary required builder role (or the
+    first required role). Supplier roles never become anchors."""
     if decision in ("Weak Match", "Poor Match"):
         return "Not a target"
-    # Anchor demands BOTH role-exact value-chain fit AND an Excellent verdict
-    # (only the full gate or an analyst approval can produce Excellent).
-    if vc_score >= 0.95 and decision == "Excellent Match":
+    required = required_roles or []
+    primary = required[0] if required else ""
+    role_fits_need = (
+        (role and primary and role == primary)
+        or (role in BUILDER_ROLES and (not required or role in required))
+    )
+    if (vc_score >= 0.95 and decision == "Excellent Match"
+            and int(ev_level) >= 1 and role_fits_need
+            and role not in SUPPLIER_ROLES):
         return "Anchor candidate"
     if role in SUPPLIER_ROLES or loc_model in ("Supplier localization",
                                                "Distribution partnership"):
@@ -567,35 +769,39 @@ def decide(final: float, gate: str, human: str, gated: bool,
 def confidence_score(comp_len, opp_len, class_conf, components, gate_agreement,
                      sector_sim: float = 1.0, penalized: bool = False,
                      evidence_quality: float = 0.5,
-                     exact_product: bool = False) -> int:
+                     exact_product: bool = False,
+                     ev_level: int = 0) -> int:
     """0-100, reflecting EVIDENCE QUALITY first. High (80-100) needs strong
     public evidence, a direct product match, and multiple agreeing signals;
     Medium (60-79) is a logical fit with some evidence and some assumptions;
     below 60 the pairing is mostly inferred.
 
-    An independent review found the raw formula wallpapered the pursue list
-    at 85-95: everything scored high because the inputs are mostly present.
-    Cross-family sector jumps and fired penalties are genuine reasons to be
-    less certain, so they deduct; thin capability evidence now weighs in
-    directly instead of being assumed away."""
+    Audit D5: without product-family evidence (ev_level ≥ 1) the score is
+    capped below the High band so long profiles cannot wallpaper High."""
     completeness = min(1.0, comp_len / 600) * 0.5 + min(1.0, opp_len / 1500) * 0.5
     vals = np.array(components, dtype=float)
     agreement = 1.0 - min(1.0, float(vals.std()) * 2.0)
     if "/" in str(gate_agreement):
         k, n = gate_agreement.split("/")
-        # a single-vote verdict is weak evidence, not unanimity
         vote = 0.55 if int(n) <= 1 else int(k) / max(1, int(n))
     else:
         vote = 0.5
-    score = (0.25 * completeness + 0.20 * float(class_conf) + 0.20 * agreement
-             + 0.15 * vote + 0.20 * float(evidence_quality))
-    if exact_product:             # verified direct product match
+    score = (0.20 * completeness + 0.15 * float(class_conf) + 0.15 * agreement
+             + 0.15 * vote + 0.25 * float(evidence_quality)
+             + 0.10 * (1.0 if int(ev_level) >= 1 else 0.0))
+    if exact_product:
         score += 0.05
-    if float(sector_sim) < 0.5:   # cross-family inference is inherently shakier
+    if float(sector_sim) < 0.5:
         score -= 0.15
-    if penalized:                 # a fired penalty flags structural doubt
+    if penalized:
         score -= 0.10
-    return int(round(100 * min(1.0, max(0.0, score))))
+    score = min(1.0, max(0.0, score))
+    # Hard ceiling: High requires at least same-family product evidence.
+    if int(ev_level) < 1:
+        score = min(score, 0.79)
+    if int(ev_level) < 2 and not exact_product:
+        score = min(score, 0.89)
+    return int(round(100 * score))
 
 
 def confidence_label(c: int) -> str:
@@ -610,20 +816,18 @@ THIN_PROFILE_CHARS = 400
 def apply_evidence_guards(decision: str, confidence: int, sector_sim: float,
                           ev_level: int, comp_len: int,
                           human_verdict: str = "") -> tuple:
-    """Post-decision conservatism guards (audit fixes, 2026-07-27). Returns
-    (possibly demoted decision, fired guard names). Analyst verdicts outrank
-    the guards - a reviewed pair is never demoted by a heuristic.
+    """Post-decision conservatism guards. Returns (possibly demoted decision,
+    fired guard names). Analyst verdicts outrank the guards.
 
       sector_mismatch_cap     cross-family pair (sector_sim < 0.25) with zero
-                              product evidence cannot exceed Weak Match (the
-                              light gate could previously award Potential to
-                              e.g. a mining company vs API manufacturing).
-      thin_profile_cap        a company with <400 chars of profile text cannot
-                              reach a vetted tier; capped at Potential Match
-                              pending data collection.
-      low_confidence_demotion a vetted tier (Good+) requires at least Medium
-                              confidence (60); mostly-inferred pairings drop
-                              to Potential Match.
+                              product evidence cannot exceed Weak Match.
+      thin_profile_cap        <400 chars of profile text cannot reach vetted.
+      low_confidence_demotion vetted tiers require confidence ≥ 60.
+      exact_product_for_excellent  Excellent requires product_evidence_level ≥ 2
+                              (audit D1/D2).
+      family_product_for_strong    Strong requires product_evidence_level ≥ 1.
+      family_product_for_good      Good requires product_evidence_level ≥ 1;
+                              otherwise demote to Potential (explore band, audit M2).
     """
     if human_verdict in ("Agree", "Disagree"):
         return decision, []
@@ -637,10 +841,94 @@ def apply_evidence_guards(decision: str, confidence: int, sector_sim: float,
             and TIER_ORDER.index(d) < TIER_ORDER.index("Potential Match")):
         d = "Potential Match"
         flags.append("thin_profile_cap")
+    if d == "Excellent Match" and int(ev_level) < 2:
+        d = "Strong Match" if int(ev_level) >= 1 else "Good Match"
+        flags.append("exact_product_for_excellent")
+    if d == "Strong Match" and int(ev_level) < 1:
+        d = "Good Match"
+        flags.append("family_product_for_strong")
+    if d == "Good Match" and int(ev_level) < 1:
+        d = "Potential Match"
+        flags.append("family_product_for_good")
     if d in VETTED_TIERS and confidence < 60:
         d = "Potential Match"
         flags.append("low_confidence_demotion")
     return d, flags
+
+
+def enforce_single_anchor(df: "pd.DataFrame") -> int:
+    """Audit M4 / D6: at most one Anchor candidate per opportunity.
+    Keep the highest-scoring Anchor; demote the rest to JV partner."""
+    if "match_type" not in df.columns:
+        return 0
+    is_anchor = df["match_type"] == "Anchor candidate"
+    if not is_anchor.any():
+        return 0
+    keep = (df[is_anchor]
+            .sort_values(["opportunity_id", "final_score"],
+                         ascending=[True, False], kind="mergesort")
+            .groupby("opportunity_id", sort=False)
+            .head(1)
+            .index)
+    demote = is_anchor & ~df.index.isin(keep)
+    n = int(demote.sum())
+    if not n:
+        return 0
+    df.loc[demote, "match_type"] = "JV partner"
+    df.loc[demote, "evidence_flag"] = [
+        (f + ";" if f else "") + "anchor_sibling_demoted"
+        for f in df.loc[demote, "evidence_flag"].fillna("")
+    ]
+    return n
+
+
+# Max Environment Services shortlist slots one company may occupy before later
+# Environment opportunities prefer other names (audit M3 / D3).
+MAX_ENV_SHORTLISTS_PER_COMPANY = 12
+
+
+def select_export_indices(df: "pd.DataFrame", narrative_top: int,
+                          max_env_per_company: int = MAX_ENV_SHORTLISTS_PER_COMPANY
+                          ) -> "pd.Index":
+    """Pick the export shortlist per opportunity. Non-Environment opps take the
+    top-N by score. Environment Services opps fill top-N while capping how often
+    the same company can appear across Environment shortlists, so SUEZ/Veolia
+    cannot monopolize the sector export."""
+    from collections import Counter
+    selected = []
+    env_counts: Counter = Counter()
+    # Process higher-scoring Environment blocks first so the best fits keep slots.
+    opp_best = df.groupby("opportunity_id")["final_score"].max()
+    for oid in opp_best.sort_values(ascending=False).index:
+        block = df[df["opportunity_id"] == oid].sort_values(
+            "final_score", ascending=False, kind="mergesort")
+        sector = str(block.iloc[0].get("opportunity_sector", "") or "").lower()
+        is_env = "environment" in sector
+        picked = []
+        skipped = []
+        for idx, row in block.iterrows():
+            if len(picked) >= narrative_top:
+                break
+            if is_env and env_counts[row["company_name"]] >= max_env_per_company:
+                skipped.append(idx)
+                continue
+            picked.append(idx)
+            if is_env:
+                env_counts[row["company_name"]] += 1
+        # Backfill if the cap left the shortlist thin.
+        for idx in skipped:
+            if len(picked) >= narrative_top:
+                break
+            picked.append(idx)
+        if len(picked) < narrative_top:
+            for idx in block.index:
+                if idx in picked:
+                    continue
+                picked.append(idx)
+                if len(picked) >= narrative_top:
+                    break
+        selected.extend(picked)
+    return pd.Index(selected)
 
 # ------------------------------ gate persistence ------------------------------
 
@@ -687,8 +975,12 @@ def _load_cache() -> dict:
 
 def _save_cache(cache: dict):
     os.makedirs(os.path.dirname(ENRICH_CACHE), exist_ok=True)
-    with open(ENRICH_CACHE, "w") as fh:
-        json.dump(cache, fh)
+    with _cache_lock:
+        payload = json.dumps(cache)
+    tmp = ENRICH_CACHE + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.write(payload)
+    os.replace(tmp, ENRICH_CACHE)
 
 
 def _chat_json(client, models, system, prompt):
@@ -715,7 +1007,11 @@ COMPANY_ENRICH_SYSTEM = (
     "evidence_quality measures how much VERIFIABLE capability evidence the text "
     "contains (named products, facilities, certifications, customers, figures): "
     "0.9+ = specific and corroborated, 0.5 = generic claims, 0.2 = marketing "
-    "copy with no checkable facts.")
+    "copy with no checkable facts. "
+    "SECTOR DISCIPLINE: pick the MOST SPECIFIC leaf that fits. Do NOT collapse "
+    "Environment Services / waste / water treatment into oil & gas; do NOT map "
+    "tourism or hospitality into energy or environment; do NOT map industrial "
+    "logistics into environment services. Distinct sectors stay distinct.")
 
 
 def company_enrich_prompt(comp) -> str:
@@ -744,7 +1040,10 @@ COMPANY
 
 OPP_ENRICH_SYSTEM = (
     "You are an investment analyst decomposing an investment opportunity. "
-    "Judge only from the text; return strict JSON.")
+    "Judge only from the text; return strict JSON. "
+    "SECTOR DISCIPLINE: pick the MOST SPECIFIC leaf. Environment Services, "
+    "waste management and water treatment are NOT oil & gas. Keep tourism/"
+    "hospitality and financial services out of energy and industrial leaves.")
 
 
 def opp_enrich_prompt(opp) -> str:
@@ -773,7 +1072,7 @@ def enrich_all(client, models, companies, opps, workers=8):
     def key_for(text):
         # v2: adds business_model / evidenced_products / evidence_quality
         # (companies) and business_model_needed / end_product (opportunities).
-        return hashlib.md5(("enrichv2::" + text).encode()).hexdigest()
+        return hashlib.md5(("enrichv3::" + text).encode()).hexdigest()
 
     def run_company(comp):
         k = key_for(str(comp["company_profile"]) + str(comp["product and Services"]))
@@ -809,8 +1108,27 @@ def enrich_all(client, models, companies, opps, workers=8):
         return opp["What is the opportunity name?"], out
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        comp_enrich = dict(ex.map(run_company, [c for _, c in companies.iterrows()]))
-        opp_enrich = dict(ex.map(run_opp, [o for _, o in opps.iterrows()]))
+        comp_list = [c for _, c in companies.iterrows()]
+        opp_list = [o for _, o in opps.iterrows()]
+        print(f"  enriching {len(comp_list)} companies...", flush=True)
+        comp_enrich = {}
+        done = 0
+        for name, out in ex.map(run_company, comp_list):
+            comp_enrich[name] = out
+            done += 1
+            if done % 50 == 0 or done == len(comp_list):
+                print(f"    companies {done}/{len(comp_list)}", flush=True)
+        # Persist after the company pool finishes so workers are not still
+        # mutating the cache during json.dump (race caused a crash mid-run).
+        _save_cache(cache)
+        print(f"  enriching {len(opp_list)} opportunities...", flush=True)
+        opp_enrich = {}
+        done = 0
+        for name, out in ex.map(run_opp, opp_list):
+            opp_enrich[name] = out
+            done += 1
+            if done % 25 == 0 or done == len(opp_list):
+                print(f"    opportunities {done}/{len(opp_list)}", flush=True)
     _save_cache(cache)
     return comp_enrich, opp_enrich
 
@@ -1132,17 +1450,35 @@ def main():
     ap.add_argument("--gpt-votes", type=int, default=3)
     ap.add_argument("--no-escalate", action="store_true")
     ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--top-n", type=int, default=3, help="gate depth per opportunity")
-    ap.add_argument("--narrative-top", type=int, default=5, help="narrative rows per company")
+    ap.add_argument("--top-n", type=int, default=5,
+                    help="full multi-vote gate depth per opportunity "
+                         "(should cover the export slice; raised to "
+                         "--narrative-top when lower)")
+    ap.add_argument("--narrative-top", type=int, default=5,
+                    help="exported / narrated rows per opportunity")
     ap.add_argument("--no-narratives", action="store_true")
     ap.add_argument("--weights", default=None, help="JSON file overriding scoring weights")
     ap.add_argument("--human-reviews", default="Data/human_reviews.csv")
     ap.add_argument("--env-file", default=None)
+    ap.add_argument("--source", choices=["db", "excel"], default="db",
+                    help="load companies/opportunities from Postgres (default) or Excel")
+    ap.add_argument("--limit-companies", type=int, default=None,
+                    help="optional cap on companies loaded from the DB")
+    ap.add_argument("--limit-opportunities", type=int, default=None,
+                    help="optional cap on opportunities loaded from the DB")
     ap.add_argument("--no-db", action="store_true",
                     help="skip upserting results into the matchmaking F database")
+    ap.add_argument("--replace-matches", action="store_true",
+                    help="delete existing model_version=v3 MatchingOutput rows before upsert")
     ap.add_argument("--fresh-gate", action="store_true",
                     help="ignore the gate verdict cache and re-vote every pair")
     args = ap.parse_args()
+    # Exported rows must receive the full panel, not the 1-vote light path —
+    # otherwise a cached 3/3 Direct on rank 4–5 is wrongly capped at Potential.
+    if args.top_n < args.narrative_top:
+        print(f"Raising --top-n from {args.top_n} to {args.narrative_top} "
+              f"so the export slice is fully gated.")
+        args.top_n = args.narrative_top
 
     try:
         from dotenv import load_dotenv
@@ -1164,11 +1500,21 @@ def main():
     if chat_client is None:
         sys.exit("FATAL: v3 requires a chat backend (enrichment + gate).")
 
-    companies = load_companies()
-    opps = load_opportunities()
+    if args.source == "db":
+        from load_to_db_v3 import load_companies_from_db, load_opportunities_from_db
+        companies = load_companies_from_db(limit=args.limit_companies)
+        opps = load_opportunities_from_db(limit=args.limit_opportunities)
+        # Opportunity-centric export: top-N per opportunity (not per company),
+        # so a 3k-company universe does not explode narrative / light-gate cost.
+        export_by = "opportunity"
+    else:
+        companies = load_companies()
+        opps = load_opportunities()
+        export_by = "company"
+
     human = load_human_reviews(args.human_reviews)
-    print(f"Loaded {len(companies)} companies, {len(opps)} opportunities, "
-          f"{len(human)} analyst verdicts.")
+    print(f"Loaded {len(companies)} companies, {len(opps)} opportunities "
+          f"(source={args.source}), {len(human)} analyst verdicts.")
     groups = detect_corporate_groups(companies["company_name"])
     if groups:
         fams = {}
@@ -1194,10 +1540,14 @@ def main():
                                          workers=args.workers)
 
     opp_names = opps["What is the opportunity name?"].tolist()
+    has_db_ids = "db_id" in companies.columns and "db_id" in opps.columns
     rows = []
-    for i, comp in companies.iterrows():
+    # enumerate so matrix indices are always 0..n-1 even if the frame index
+    # is not a RangeIndex (db_id values must never be used as matrix coords).
+    for i, (_, comp) in enumerate(companies.iterrows()):
         ce = comp_enrich.get(comp["company_name"], {})
-        c_node = ce.get("normalized_sector") or normalize_sector_label(comp["Sector"])
+        c_node = resolve_sector_node(
+            comp["Sector"], ce.get("normalized_sector") or "")
         c_role = ce.get("value_chain_role", "")
         c_role2 = ce.get("secondary_role", "")
         c_bm = str(ce.get("business_model", "") or "")
@@ -1207,10 +1557,12 @@ def main():
         readiness, strategic, localization = compose_readiness(dims)
         class_conf = float(ce.get("classification_confidence", 0.3) or 0.3)
         comp_len = len(str(comp["company_profile"])) + len(str(comp["product and Services"]))
+        company_pk = int(comp["db_id"]) if has_db_ids else (i + 1)
 
-        for j, opp in opps.iterrows():
+        for j, (_, opp) in enumerate(opps.iterrows()):
             oe = opp_enrich.get(opp_names[j], {})
-            o_node = oe.get("normalized_sector") or normalize_sector_label(opp["Sector"])
+            o_node = resolve_sector_node(
+                opp["Sector"], oe.get("normalized_sector") or "")
             required = oe.get("required_roles", []) or []
             o_bm = str(oe.get("business_model_needed", "") or "")
             end_product = str(oe.get("end_product", "") or "")
@@ -1230,9 +1582,10 @@ def main():
                     + weights["localization"] * localization)
             factor, applied = compute_penalties(s_sim, p_sem, pr_sem, vc, c_role, required)
             final = round(max(0.05, base * factor), 3)
+            opportunity_pk = int(opp["db_id"]) if has_db_ids else (j + 1)
             rows.append({
-                "company_id": i + 1, "company_name": comp["company_name"],
-                "opportunity_id": j + 1, "opportunity_name": opp_names[j],
+                "company_id": company_pk, "company_name": comp["company_name"],
+                "opportunity_id": opportunity_pk, "opportunity_name": opp_names[j],
                 "corporate_group": groups.get(comp["company_name"], ""),
                 "company_sector": comp["Sector"], "normalized_sector": c_node,
                 "opportunity_sector": opp["Sector"],
@@ -1258,13 +1611,28 @@ def main():
     df["rank_for_opp"] = (df.groupby("opportunity_id")["final_score"]
                           .rank(method="first", ascending=False).astype(int))
 
+    # Export shortlist: Environment Services applies a per-company concentration
+    # cap so a few operators cannot fill every Environment slot (audit M3).
+    if export_by == "opportunity":
+        export_idx = select_export_indices(df, args.narrative_top)
+        df["_export"] = df.index.isin(export_idx)
+        n_env_swap = int(
+            ((df["rank_for_opp"] <= args.narrative_top) & ~df["_export"]).sum())
+        if n_env_swap:
+            print(f"Environment diversity: replaced {n_env_swap} concentrated "
+                  f"shortlist slots (cap {MAX_ENV_SHORTLISTS_PER_COMPANY}/company).")
+    else:
+        df["_export"] = df["rank"] <= args.narrative_top
+
     # graded gate on top-N per opportunity (reuses v2 gate + exemplars + drift)
     exemplar_pairs = build_exemplar_lines(human, companies)
     prior = load_prior_verdicts()
     df["gate"] = ""
     df["gate_agreement"] = ""
     df["gate_depth"] = ""
-    todo = df[df["rank_for_opp"] <= args.top_n]
+    # Full-gate the score top-N and every exported row (diversity may pull
+    # deeper Environment candidates into the ship set).
+    todo = df[(df["rank_for_opp"] <= args.top_n) | df["_export"]]
     print(f"Gate: validating {len(todo)} pairs ({args.gpt_votes}-vote)...")
 
     gate_cache = {} if args.fresh_gate else load_gate_cache()
@@ -1278,7 +1646,7 @@ def main():
         lines = [l for p, l in exemplar_pairs
                  if p != (row["company_name"], row["opportunity_name"])][-8:]
         exemplars = "\n".join(lines)
-        comp, opp_row = companies.loc[row["_i"]], opps.loc[row["_j"]]
+        comp, opp_row = companies.iloc[row["_i"]], opps.iloc[row["_j"]]
         key = gate_cache_key(comp, opp_row, exemplars)
         with _gate_lock:
             cached = gate_cache.get(key)
@@ -1318,7 +1686,8 @@ def main():
     # Light gate for every remaining EXPORTED row (single vote): without this,
     # the long tail was never examined and sat in "Potential Match", which reads
     # as an endorsement. Every row the file ships now carries a real verdict.
-    light = df[(df["rank"] <= args.narrative_top) & (df["gate"] == "")]
+    export_mask = df["_export"]
+    light = df[export_mask & (df["gate"] == "")]
     if len(light):
         print(f"Light gate (1-vote) for {len(light)} remaining exported rows...")
 
@@ -1330,7 +1699,12 @@ def main():
             for idx, (fit, conf, expl, model, agree) in ex.map(_light, list(light.iterrows())):
                 df.at[idx, "gate"] = fit
                 df.at[idx, "gate_agreement"] = agree
-                df.at[idx, "gate_depth"] = "light"
+                # Cached full-panel verdicts must keep full depth — otherwise a
+                # reused 3/3 Partial is wrongly capped at Potential Match.
+                n_votes = (int(str(agree).split("/")[1])
+                           if "/" in str(agree) else 1)
+                df.at[idx, "gate_depth"] = (
+                    "full" if n_votes >= args.gpt_votes else "light")
 
     save_gate_cache(gate_cache)
     print(f"Gate persistence: {gate_stats['reused']} verdicts reused from cache, "
@@ -1371,8 +1745,15 @@ def main():
     # iterrows, not itertuples: underscore-prefixed helper columns are renamed
     # positionally by itertuples and become unreachable by name.
     for _, r in df.iterrows():
+        # Prefer agreement panel size over gate_depth: a reused 3/3 verdict is
+        # full-depth even when it arrived via the light-gate code path.
+        agree = str(r["gate_agreement"] or "")
+        if "/" in agree:
+            light = int(agree.split("/")[1]) < args.gpt_votes
+        else:
+            light = (r["gate_depth"] == "light")
         d = decide(r["final_score"], r["gate"], r["human_verdict"], bool(r["gate"]),
-                   light=(r["gate_depth"] == "light"))
+                   light=light)
         comps = [r["sector_similarity"], r["profile_similarity"], r["product_similarity"],
                  r["value_chain_score"], r["investment_readiness_score"]]
         c = confidence_score(r["_comp_len"], 1500, r["_class_conf"], comps,
@@ -1380,7 +1761,8 @@ def main():
                              sector_sim=float(r["sector_similarity"]),
                              penalized=bool(r["_penalties"]),
                              evidence_quality=float(r["_evq"]),
-                             exact_product=bool(r["_exact"]))
+                             exact_product=bool(r["_exact"]),
+                             ev_level=int(r["_ev_level"]))
         d, guards = apply_evidence_guards(d, c, float(r["sector_similarity"]),
                                           int(r["_ev_level"]), int(r["_comp_len"]),
                                           r["human_verdict"])
@@ -1398,7 +1780,7 @@ def main():
               f"({df[df['evidence_flag'] != '']['evidence_flag'].str.split(';').explode().value_counts().to_dict()}).")
 
     # narratives for the export slice
-    out_rows = df[df["rank"] <= args.narrative_top].copy()
+    out_rows = df[export_mask].copy()
     for k in ["strengths", "risks", "value_chain_position",
               "recommended_engagement",
               "suggested_localization_model", "match_reason", "executive_summary",
@@ -1410,8 +1792,9 @@ def main():
 
         def _narr(item):
             idx, row = item
+            # companies/opps are RangeIndexed after loaders; _i/_j are positions.
             g = generate_narrative(chat_client, chat_models,
-                                   companies.loc[row["_i"]], opps.loc[row["_j"]],
+                                   companies.iloc[row["_i"]], opps.iloc[row["_j"]],
                                    row["decision"], row["_role"], row["_required"],
                                    business_model=row["_bm"],
                                    evidenced_products=row["_products"],
@@ -1454,8 +1837,15 @@ def main():
     out_rows["business_model"] = out_rows["_bm"]
     out_rows["match_type"] = [
         match_type(r["decision"], float(r["value_chain_score"]),
-                   r["suggested_localization_model"], r["_role"])
+                   r["suggested_localization_model"], r["_role"],
+                   ev_level=int(r["_ev_level"]),
+                   required_roles=r["_required"] if isinstance(r["_required"], list)
+                   else [])
         for _, r in out_rows.iterrows()]
+    n_anchor_demote = enforce_single_anchor(out_rows)
+    if n_anchor_demote:
+        print(f"Anchor demotions: {n_anchor_demote} co-anchors → JV partner "
+              f"(one Anchor per opportunity).")
     status_by_opp = {
         oid: opportunity_status(list(zip(g["decision"], g["match_type"])))
         for oid, g in out_rows.groupby("opportunity_id")}
@@ -1505,8 +1895,14 @@ def main():
 
     if not args.no_db:
         try:
-            from load_to_db_v3 import load_csv
-            stats = load_csv(OUTPUT_CSV)
+            from load_to_db_v3 import clear_matching_output, upsert_matches, load_csv
+            if args.replace_matches or args.source == "db":
+                deleted = clear_matching_output()
+                print(f"Cleared {deleted} prior model_version=v3 MatchingOutput rows.")
+            if args.source == "db" or "db_id" in companies.columns:
+                stats = upsert_matches(out)
+            else:
+                stats = load_csv(OUTPUT_CSV)
             print(f"Database '{stats['dbname']}': {stats['inserted']} rows inserted, "
                   f"{stats['updated']} updated in MatchingOutput "
                   f"(+{stats['companies_created']} companies, "

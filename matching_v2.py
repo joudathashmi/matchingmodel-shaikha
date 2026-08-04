@@ -402,6 +402,8 @@ def embed_texts(texts: list, client, model: str, cache: dict) -> np.ndarray:
     """Batched embeddings against a shared in-memory cache keyed by (model,
     text), so Azure and public-API vectors never collide. The caller owns
     loading/saving the cache once per run (embed_texts only fills it)."""
+    # OpenAI rejects empty strings; normalize before hashing/caching.
+    texts = [("unspecified" if not str(t).strip() else str(t)) for t in texts]
     missing = [t for t in texts if _hash(t, model) not in cache]
     for start in range(0, len(missing), EMBED_BATCH):
         chunk = missing[start:start + EMBED_BATCH]

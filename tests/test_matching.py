@@ -347,14 +347,62 @@ def test_v3_inferred_scores_carry_no_weight():
 def test_v3_match_type_classification():
     # rejected rows are never targets, whatever their scores
     assert v3.match_type("Weak Match", 0.9, "Joint venture") == "Not a target"
-    # anchor needs role-identical compatibility AND an Excellent verdict
-    assert v3.match_type("Excellent Match", 1.0, "Greenfield manufacturing") == "Anchor candidate"
-    assert v3.match_type("Strong Match", 1.0, "Greenfield manufacturing") == "JV partner"
+    # anchor needs Excellent + VC fit + product evidence + builder role
+    assert v3.match_type(
+        "Excellent Match", 1.0, "Greenfield manufacturing",
+        role="OEM", ev_level=2, required_roles=["OEM"]) == "Anchor candidate"
+    assert v3.match_type("Strong Match", 1.0, "Greenfield manufacturing",
+                         role="OEM", ev_level=2) == "JV partner"
     # strong compatibility or an explicit JV model = JV partner
     assert v3.match_type("Strong Match", 0.8, "Regional assembly") == "JV partner"
     assert v3.match_type("Good Match", 0.5, "Joint venture") == "JV partner"
     # supplier-grade compatibility = supplier localization
     assert v3.match_type("Strong Match", 0.45, "Supplier localization") == "Supplier localization"
+
+
+def test_v3_product_evidence_plurals_and_categories():
+    # audit M1: vaccines vs vaccine; brand lines that name the category
+    assert v3.product_evidence_level(
+        "vaccines", ["Gardasil vaccine", "Zostavax vaccine"]) == 2
+    assert v3.product_evidence_level(
+        "vaccines", ["Comirnaty COVID-19 vaccine"]) == 2
+    assert v3.product_evidence_level(
+        "medical plastic gloves", ["Biogel surgical gloves"]) == 2
+    assert v3.product_evidence_level(
+        "medical plastic gloves", ["Latex and Nitrile Gloves"]) == 2
+    assert v3.product_evidence_level(
+        "toothpaste", ["Sensodyne toothpaste", "Parodontax"]) >= 1
+    # unrelated product stays at 0
+    assert v3.product_evidence_level(
+        "vaccines", ["steel pipes", "construction chemicals"]) == 0
+
+
+def test_v3_good_requires_family_evidence():
+    # audit M2: Good without product evidence → Potential (explore band)
+    d, flags = v3.apply_evidence_guards("Good Match", 75, 1.0, 0, 2000)
+    assert d == "Potential Match"
+    assert "family_product_for_good" in flags
+    d2, flags2 = v3.apply_evidence_guards("Good Match", 75, 1.0, 1, 2000)
+    assert d2 == "Good Match"
+    assert flags2 == []
+
+
+def test_v3_enforce_single_anchor():
+    import pandas as pd
+    df = pd.DataFrame([
+        {"opportunity_id": 1, "company_name": "A", "final_score": 0.95,
+         "match_type": "Anchor candidate", "evidence_flag": ""},
+        {"opportunity_id": 1, "company_name": "B", "final_score": 0.94,
+         "match_type": "Anchor candidate", "evidence_flag": ""},
+        {"opportunity_id": 2, "company_name": "C", "final_score": 0.9,
+         "match_type": "Anchor candidate", "evidence_flag": ""},
+    ])
+    n = v3.enforce_single_anchor(df)
+    assert n == 1
+    assert df.loc[0, "match_type"] == "Anchor candidate"
+    assert df.loc[1, "match_type"] == "JV partner"
+    assert "anchor_sibling_demoted" in df.loc[1, "evidence_flag"]
+    assert df.loc[2, "match_type"] == "Anchor candidate"
 
 
 def test_v3_opportunity_status_restores_abstention():

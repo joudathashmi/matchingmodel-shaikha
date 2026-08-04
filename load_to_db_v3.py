@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""Load Output/matching_output_v3.csv into the local "matchmaking F" Postgres
-database (Prisma-managed app schema).
+"""Database I/O for matching_v3 against the local "matchmaking F" Postgres DB.
 
-The app's MatchingOutput table references Company and Opportunity by integer
-foreign keys, and none of this project's 61 companies / 12 opportunities exist
-in the app universe, so the loader:
+Primary path (DB-native):
+  - load_companies_from_db / load_opportunities_from_db  → pipeline DataFrames
+  - upsert_matches(df)  → MatchingOutput keyed by existing companyId/opportunityId
 
-  1. inserts missing companies (exact company_name match only - no fuzzy
-     attach, so e.g. our "Belden" is NOT merged into the app's
-     "Belden (Opterna)" subsidiary) with profile fields from Data/companies.xlsx;
-  2. inserts missing opportunities with fields from Data/new_opportunities.xlsx;
-  3. upserts match rows on the (companyId, opportunityId) unique constraint.
-
-Legacy columns are populated with a lossy mapping (documented inline); the
-full-fidelity v3 fields go to the columns added on 2026-07-28. Every row this
-loader touches carries model_version='v3' so it can be audited or deleted:
-
-    DELETE FROM "MatchingOutput" WHERE model_version = 'v3';
+Legacy path (Excel → DB, kept for back-compat):
+  - load_csv() still upserts a CSV and may create missing Company/Opportunity
+    rows from the Excel sources.
 """
+
+from __future__ import annotations
 
 import csv
 import json
 import math
 import os
 import re
-import sys
 from datetime import datetime, timezone
 
 import pandas as pd
 import psycopg2
+from sqlalchemy import create_engine
+
+from matching_v2 import (
+    canonical_name,
+    focus_company_text,
+    focus_opportunity_text,
+    preprocess,
+)
 
 DB = dict(
     dbname=os.environ.get("MATCHDB_NAME", "matchmaking F"),
@@ -43,13 +43,20 @@ COMPANIES_XLSX = "Data/companies.xlsx"
 OPPORTUNITIES_XLSX = "Data/new_opportunities.xlsx"
 HUMAN_REVIEWS = "Data/human_reviews.csv"
 MODEL_VERSION = "v3"
-
-# Vetted tiers map to the app's legacy binary decision.
 YES_TIERS = {"Excellent Match", "Strong Match", "Good Match"}
 
 
+def connect():
+    return psycopg2.connect(**DB)
+
+
+def sql_engine():
+    # Use a creator so the DB name with a space ("matchmaking F") is never
+    # mangled by URL encoding.
+    return create_engine("postgresql+psycopg2://", creator=connect)
+
+
 def _s(v):
-    """NaN/None-safe string, None when empty."""
     if v is None:
         return None
     if isinstance(v, float) and math.isnan(v):
@@ -59,73 +66,120 @@ def _s(v):
 
 
 def parse_confidence(v):
-    """'91 (High)' -> (91, 'High')."""
     m = re.match(r"\s*(\d+)\s*\((\w+)\)", str(v))
     return (int(m.group(1)), m.group(2)) if m else (None, None)
 
 
-def load_company_source():
-    df = pd.read_excel(COMPANIES_XLSX)
-    df = df.rename(columns={
-        "Company Name": "company_name", "Company Profile": "company_profile",
-        "Product/Services": "product_services",
-    })
-    return {str(r["company_name"]).strip(): r for _, r in df.iterrows()}
+# ------------------------------ DB → pipeline -------------------------------
 
 
-def load_opportunity_source():
-    df = pd.read_excel(OPPORTUNITIES_XLSX)
-    return {str(r["What is the opportunity name?"]).strip(): r for _, r in df.iterrows()}
+def load_companies_from_db(limit: int | None = None,
+                           require_profile: bool = True) -> pd.DataFrame:
+    """Load Company rows shaped like the Excel loader output, plus db_id."""
+    sql = '''
+        SELECT id AS db_id,
+               company_name,
+               coalesce(company_sector, '') AS "Sector",
+               coalesce(company_profile, '') AS company_profile,
+               coalesce(product_services, '') AS "product and Services"
+        FROM "Company"
+        WHERE coalesce(company_name, '') <> ''
+    '''
+    if require_profile:
+        sql += " AND length(coalesce(company_profile, '')) > 20"
+    sql += " ORDER BY id"
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+
+    with sql_engine().connect() as conn:
+        df = pd.read_sql(sql, conn)
+
+    if df.empty:
+        raise RuntimeError('No companies found in "Company" table')
+
+    # Deduplicate by canonical name (same rule as the Excel loader).
+    df["_canon"] = df["company_name"].map(canonical_name)
+    df["_richness"] = (df["company_profile"].astype(str).str.len()
+                       + df["product and Services"].astype(str).str.len())
+    merged = []
+    for key, grp in df.groupby("_canon"):
+        if len(grp) > 1:
+            keep = grp["_richness"].idxmax()
+            dropped = grp.drop(index=keep)["company_name"].tolist()
+            merged.append((grp.loc[keep, "company_name"], dropped))
+    if merged:
+        keep_idx = df.groupby("_canon")["_richness"].idxmax()
+        df = df.loc[sorted(keep_idx)]
+        for kept, dropped in merged:
+            print(f"Entity resolution: kept '{kept}', merged duplicate(s): {dropped}")
+    df = df.drop(columns=["_canon", "_richness"])
+
+    raw_combined = (
+        df[["company_name", "company_profile", "product and Services"]]
+        .astype(str).agg(" ".join, axis=1)
+    )
+    df["combined"] = raw_combined.apply(preprocess)
+    df["combined_focused"] = raw_combined.apply(
+        lambda t: preprocess(focus_company_text(t)))
+    df["products_clean"] = df["product and Services"].astype(str).apply(preprocess)
+    # OpenAI embeddings reject empty strings; keep a stable placeholder.
+    for col in ("combined", "combined_focused", "products_clean"):
+        empty = df[col].astype(str).str.strip() == ""
+        if empty.any():
+            df.loc[empty, col] = "unspecified"
+    df.attrs["merged_entities"] = merged
+    return df.reset_index(drop=True)
 
 
-def load_human_verdicts():
-    out = {}
-    try:
-        with open(HUMAN_REVIEWS) as fh:
-            for row in csv.DictReader(fh):
-                out[(row["company"].strip(), row["opportunity"].strip())] = \
-                    row["verdict"].strip().capitalize()  # agree -> Agree
-    except FileNotFoundError:
-        pass
-    return out
+def load_opportunities_from_db(limit: int | None = None) -> pd.DataFrame:
+    """Load Opportunity rows mapped onto the Excel column names the rest of
+    the pipeline still reads."""
+    sql = '''
+        SELECT id AS db_id,
+               opportunity_name AS "What is the opportunity name?",
+               coalesce(sector, '') AS "Sector",
+               coalesce(opportunity_description, '') AS "What is the opportunity description?",
+               coalesce(investment_highlights, '') AS "What are the investment highlights?",
+               coalesce(value_proposition, '') AS "What is the value proposition of this opportunity?",
+               coalesce(key_demand_drivers, '') AS "What are the key demand drivers?",
+               coalesce(materials_required, '') AS "What materials are involved or required in the project?",
+               coalesce(key_players, '') AS "Who are the key players in this sector or project?",
+               '' AS "Market data",
+               '' AS "Risks and mitigations"
+        FROM "Opportunity"
+        WHERE coalesce(opportunity_name, '') <> ''
+        ORDER BY id
+    '''
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+
+    with sql_engine().connect() as conn:
+        df = pd.read_sql(sql, conn)
+
+    if df.empty:
+        raise RuntimeError('No opportunities found in "Opportunity" table')
+
+    fields = [
+        "What is the opportunity name?", "What is the opportunity description?",
+        "What are the investment highlights?",
+        "What is the value proposition of this opportunity?",
+        "What are the key demand drivers?",
+        "What materials are involved or required in the project?",
+        "Who are the key players in this sector or project?",
+        "Market data", "Risks and mitigations",
+    ]
+    raw_req = df.apply(lambda r: " ".join(str(r.get(f, "")) for f in fields), axis=1)
+    df["requirement"] = raw_req.apply(preprocess)
+    df["requirement_focused"] = raw_req.apply(
+        lambda t: preprocess(focus_opportunity_text(t)))
+    for col in ("requirement", "requirement_focused"):
+        empty = df[col].astype(str).str.strip() == ""
+        if empty.any():
+            df.loc[empty, col] = "unspecified"
+    return df.reset_index(drop=True)
 
 
-def ensure_company(cur, name, src_rows, created):
-    cur.execute('SELECT id FROM "Company" WHERE company_name = %s', (name,))
-    row = cur.fetchone()
-    if row:
-        return row[0]
-    src = src_rows.get(name)
-    cur.execute(
-        'INSERT INTO "Company" (company_name, company_sector, company_profile, '
-        'product_services) VALUES (%s, %s, %s, %s) RETURNING id',
-        (name,
-         _s(src.get("Sector")) if src is not None else None,
-         _s(src.get("company_profile")) if src is not None else None,
-         _s(src.get("product_services")) if src is not None else None))
-    created.append(name)
-    return cur.fetchone()[0]
-
-
-def ensure_opportunity(cur, name, src_rows, created):
-    cur.execute('SELECT id FROM "Opportunity" WHERE opportunity_name = %s', (name,))
-    row = cur.fetchone()
-    if row:
-        return row[0]
-    src = src_rows.get(name)
-    g = (lambda k: _s(src.get(k))) if src is not None else (lambda k: None)
-    cur.execute(
-        'INSERT INTO "Opportunity" (opportunity_name, sector, opportunity_description, '
-        'investment_highlights, value_proposition, key_demand_drivers, key_players, '
-        'materials_required) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id',
-        (name, g("Sector"), g("What is the opportunity description?"),
-         g("What are the investment highlights?"),
-         g("What is the value proposition of this opportunity?"),
-         g("What are the key demand drivers?"),
-         g("Who are the key players in this sector or project?"),
-         g("What materials are involved or required in the project?")))
-    created.append(name)
-    return cur.fetchone()[0]
+# ------------------------------ MatchingOutput upsert -----------------------
 
 
 UPSERT = '''
@@ -189,23 +243,196 @@ RETURNING (xmax = 0) AS inserted
 
 
 def _sync_sequences(cur):
-    """The app's tables were bulk-loaded with explicit ids, leaving the
-    sequences behind max(id); align them so inserts cannot collide."""
     for table in ("MatchingOutput", "Company", "Opportunity"):
         cur.execute(
             f'SELECT setval(\'"{table}_id_seq"\', '
             f'(SELECT COALESCE(MAX(id), 1) FROM "{table}"))')
 
 
+def clear_matching_output(model_version: str | None = MODEL_VERSION) -> int:
+    """Delete MatchingOutput rows (and dependent MatchAgreement) before a
+    fresh DB-native run. Pass model_version=None to wipe the whole table."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            if model_version is None:
+                cur.execute('DELETE FROM "MatchAgreement"')
+                cur.execute('DELETE FROM "MatchingOutput"')
+            else:
+                cur.execute(
+                    'DELETE FROM "MatchAgreement" WHERE "matchId" IN '
+                    '(SELECT id FROM "MatchingOutput" WHERE model_version = %s)',
+                    (model_version,))
+                cur.execute(
+                    'DELETE FROM "MatchingOutput" WHERE model_version = %s',
+                    (model_version,))
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
+def _row_params(r, human: dict, now) -> dict:
+    cname = str(r["company_name"]).strip()
+    oname = str(r["opportunity_name"]).strip()
+    conf_num, conf_label = parse_confidence(r.get("confidence_score", ""))
+    plan = [p for p in (_s(r.get("recommended_engagement")),
+                        _s(r.get("suggested_localization_model"))) if p]
+    company_id = int(r["company_id"])
+    opportunity_id = int(r["opportunity_id"])
+    hv = _s(r.get("human_verdict")) or human.get((cname, oname))
+    return dict(
+        companyId=company_id,
+        opportunityId=opportunity_id,
+        company_name=cname,
+        opportunity_name=oname,
+        company_sector=_s(r.get("company_sector")),
+        opportunity_sector=_s(r.get("opportunity_sector")),
+        sector_similarity=float(r["sector_similarity"]),
+        profile_similarity=float(r["profile_similarity"]),
+        product_similarity=float(r["product_similarity"]),
+        ai_score=float(r["ai_score"]),
+        ai_decision="Yes" if r["decision"] in YES_TIERS else "No",
+        final_score=float(r["final_score"]),
+        ai_explanation=_s(r.get("executive_summary")),
+        rank=int(r["rank"]),
+        ai_insight=_s(r.get("strengths")),
+        suggested_plan=json.dumps(plan) if plan else None,
+        match_reason=_s(r.get("match_reason")),
+        decision_tier=r["decision"],
+        confidence_score=conf_num,
+        confidence_label=conf_label,
+        evidence_flag=_s(r.get("evidence_flag")),
+        corporate_group=_s(r.get("corporate_group")),
+        business_model=_s(r.get("business_model")),
+        value_chain_role=_s(r.get("value_chain_role")),
+        value_chain_position=_s(r.get("value_chain_position")),
+        value_chain_score=float(r["value_chain_score"]) if pd.notna(r.get("value_chain_score")) else None,
+        match_type=_s(r.get("match_type")),
+        opportunity_status=_s(r.get("opportunity_status")),
+        strengths=_s(r.get("strengths")),
+        risks=_s(r.get("risks")),
+        recommended_engagement=_s(r.get("recommended_engagement")),
+        suggested_localization_model=_s(r.get("suggested_localization_model")),
+        human_verdict=hv,
+        model_version=MODEL_VERSION,
+        matched_at=now,
+    )
+
+
+def upsert_matches(df: pd.DataFrame, human: dict | None = None) -> dict:
+    """Upsert a matching DataFrame that already carries DB company_id /
+    opportunity_id values. Does not create Company or Opportunity rows."""
+    if "company_id" not in df.columns or "opportunity_id" not in df.columns:
+        raise KeyError("DataFrame must include company_id and opportunity_id "
+                       "(database primary keys)")
+    human = human if human is not None else load_human_verdicts()
+    now = datetime.now(timezone.utc)
+    inserted = updated = 0
+
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        _sync_sequences(cur)
+        for _, r in df.iterrows():
+            cur.execute(UPSERT, _row_params(r, human, now))
+            if cur.fetchone()[0]:
+                inserted += 1
+            else:
+                updated += 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+    return dict(dbname=DB["dbname"], companies_created=0, opportunities_created=0,
+                inserted=inserted, updated=updated, matched_at=now.isoformat())
+
+
+# ------------------------------ legacy Excel → DB ---------------------------
+
+
+def load_company_source():
+    df = pd.read_excel(COMPANIES_XLSX)
+    df = df.rename(columns={
+        "Company Name": "company_name", "Company Profile": "company_profile",
+        "Product/Services": "product_services",
+    })
+    return {str(r["company_name"]).strip(): r for _, r in df.iterrows()}
+
+
+def load_opportunity_source():
+    df = pd.read_excel(OPPORTUNITIES_XLSX)
+    return {str(r["What is the opportunity name?"]).strip(): r for _, r in df.iterrows()}
+
+
+def load_human_verdicts():
+    out = {}
+    try:
+        with open(HUMAN_REVIEWS) as fh:
+            for row in csv.DictReader(fh):
+                out[(row["company"].strip(), row["opportunity"].strip())] = \
+                    row["verdict"].strip().capitalize()
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def ensure_company(cur, name, src_rows, created):
+    cur.execute('SELECT id FROM "Company" WHERE company_name = %s', (name,))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    src = src_rows.get(name)
+    cur.execute(
+        'INSERT INTO "Company" (company_name, company_sector, company_profile, '
+        'product_services) VALUES (%s, %s, %s, %s) RETURNING id',
+        (name,
+         _s(src.get("Sector")) if src is not None else None,
+         _s(src.get("company_profile")) if src is not None else None,
+         _s(src.get("product_services")) if src is not None else None))
+    created.append(name)
+    return cur.fetchone()[0]
+
+
+def ensure_opportunity(cur, name, src_rows, created):
+    cur.execute('SELECT id FROM "Opportunity" WHERE opportunity_name = %s', (name,))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    src = src_rows.get(name)
+    g = (lambda k: _s(src.get(k))) if src is not None else (lambda k: None)
+    cur.execute(
+        'INSERT INTO "Opportunity" (opportunity_name, sector, opportunity_description, '
+        'investment_highlights, value_proposition, key_demand_drivers, key_players, '
+        'materials_required) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id',
+        (name, g("Sector"), g("What is the opportunity description?"),
+         g("What are the investment highlights?"),
+         g("What is the value proposition of this opportunity?"),
+         g("What are the key demand drivers?"),
+         g("Who are the key players in this sector or project?"),
+         g("What materials are involved or required in the project?")))
+    created.append(name)
+    return cur.fetchone()[0]
+
+
 def load_csv(csv_path: str = CSV_PATH) -> dict:
-    """Upsert a matching_v3 output CSV into the database. Returns stats."""
+    """Legacy: upsert a CSV, creating missing Company/Opportunity rows from Excel."""
     df = pd.read_csv(csv_path)
+    # Prefer DB-native path when the CSV already carries real PK ids that exist.
+    if {"company_id", "opportunity_id"}.issubset(df.columns):
+        # Heuristic: Excel-era ids were small sequential 1..N; DB ids are large.
+        # If max company_id exceeds the CSV company count by a lot, treat as DB ids.
+        if df["company_id"].max() > len(df["company_name"].unique()) + 10:
+            return upsert_matches(df)
+
     comp_src = load_company_source()
     opp_src = load_opportunity_source()
     human = load_human_verdicts()
     now = datetime.now(timezone.utc)
 
-    conn = psycopg2.connect(**DB)
+    conn = connect()
     cur = conn.cursor()
     new_companies, new_opps = [], []
     comp_ids, opp_ids = {}, {}
@@ -220,48 +447,11 @@ def load_csv(csv_path: str = CSV_PATH) -> dict:
                 comp_ids[cname] = ensure_company(cur, cname, comp_src, new_companies)
             if oname not in opp_ids:
                 opp_ids[oname] = ensure_opportunity(cur, oname, opp_src, new_opps)
-
-            conf_num, conf_label = parse_confidence(r["confidence_score"])
-            plan = [p for p in (_s(r.get("recommended_engagement")),
-                                _s(r.get("suggested_localization_model"))) if p]
-            params = dict(
-                companyId=comp_ids[cname],
-                opportunityId=opp_ids[oname],
-                company_name=cname,
-                opportunity_name=oname,
-                company_sector=_s(r.get("company_sector")),
-                opportunity_sector=_s(r.get("opportunity_sector")),
-                sector_similarity=float(r["sector_similarity"]),
-                profile_similarity=float(r["profile_similarity"]),
-                product_similarity=float(r["product_similarity"]),
-                ai_score=float(r["ai_score"]),
-                # lossy legacy mapping: vetted tiers (Good+) -> Yes
-                ai_decision="Yes" if r["decision"] in YES_TIERS else "No",
-                final_score=float(r["final_score"]),
-                ai_explanation=_s(r.get("executive_summary")),
-                rank=int(r["rank"]),
-                ai_insight=_s(r.get("strengths")),
-                suggested_plan=json.dumps(plan) if plan else None,
-                match_reason=_s(r.get("match_reason")),
-                decision_tier=r["decision"],
-                confidence_score=conf_num,
-                confidence_label=conf_label,
-                evidence_flag=_s(r.get("evidence_flag")),
-                corporate_group=_s(r.get("corporate_group")),
-                business_model=_s(r.get("business_model")),
-                value_chain_role=_s(r.get("value_chain_role")),
-                value_chain_position=_s(r.get("value_chain_position")),
-                value_chain_score=float(r["value_chain_score"]),
-                match_type=_s(r.get("match_type")),
-                opportunity_status=_s(r.get("opportunity_status")),
-                strengths=_s(r.get("strengths")),
-                risks=_s(r.get("risks")),
-                recommended_engagement=_s(r.get("recommended_engagement")),
-                suggested_localization_model=_s(r.get("suggested_localization_model")),
-                human_verdict=human.get((cname, oname)),
-                model_version=MODEL_VERSION,
-                matched_at=now,
-            )
+            params = _row_params(
+                {**r.to_dict(),
+                 "company_id": comp_ids[cname],
+                 "opportunity_id": opp_ids[oname]},
+                human, now)
             cur.execute(UPSERT, params)
             if cur.fetchone()[0]:
                 inserted += 1

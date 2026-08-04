@@ -60,8 +60,18 @@ def main():
     args = ap.parse_args()
 
     out = pd.read_csv(args.csv, keep_default_na=False)
-    companies = load_companies()
-    opps = load_opportunities()
+    # Prefer DB loaders when the CSV carries real database primary keys.
+    use_db = (out["company_id"].max() > len(out["company_name"].unique()) + 10
+              if "company_id" in out.columns else False)
+    if use_db:
+        from load_to_db_v3 import load_companies_from_db, load_opportunities_from_db
+        companies = load_companies_from_db()
+        opps = load_opportunities_from_db()
+        print(f"Verifier source: database ({len(companies)} companies, {len(opps)} opportunities)")
+    else:
+        companies = load_companies()
+        opps = load_opportunities()
+        print(f"Verifier source: excel ({len(companies)} companies, {len(opps)} opportunities)")
     human = load_human_reviews()
     backends = resolve_backends(args_ns)
 
@@ -91,10 +101,10 @@ def main():
         n_checked += 1
         ce = comp_enrich.get(r.company_name, {})
         oe = opp_enrich.get(r.opportunity_name, {})
-        c_node = ce.get("normalized_sector") or v3.normalize_sector_label(
-            companies.iloc[i]["Sector"])
-        o_node = oe.get("normalized_sector") or v3.normalize_sector_label(
-            opps.iloc[j]["Sector"])
+        c_node = v3.resolve_sector_node(
+            companies.iloc[i]["Sector"], ce.get("normalized_sector") or "")
+        o_node = v3.resolve_sector_node(
+            opps.iloc[j]["Sector"], oe.get("normalized_sector") or "")
         dev_sector = max(dev_sector, abs(v3.sector_similarity(c_node, o_node)
                                          - float(r.sector_similarity)))
         # raw percentile blend is calibrated by business model + product evidence
@@ -172,9 +182,11 @@ def main():
         expect, exp_flags = v3.apply_evidence_guards(
             expect, conf, float(r.sector_similarity), ev_level, comp_len, hv)
         n_dec += 1
-        # group_sibling_demoted is a ranking flag, not an evidence guard
-        file_flags = ";".join(f for f in str(getattr(r, "evidence_flag", "") or "").split(";")
-                              if f and f != "group_sibling_demoted")
+        # ranking / post-process flags are not evidence guards
+        file_flags = ";".join(
+            f for f in str(getattr(r, "evidence_flag", "") or "").split(";")
+            if f and f not in ("group_sibling_demoted", "anchor_sibling_demoted",
+                               "env_concentration_demoted"))
         if expect != r.decision or ";".join(exp_flags) != file_flags:
             n_dec_bad += 1
             if len(examples) < 4:
@@ -186,12 +198,22 @@ def main():
         print("   decision mismatch:", e)
 
     # ---- layer 6: match_type and opportunity_status from the file itself ----
-    mt_bad = sum(1 for r in out.itertuples()
-                 if v3.match_type(r.decision, float(r.value_chain_score),
-                                  r.suggested_localization_model,
-                                  getattr(r, "value_chain_role", "")) != r.match_type)
+    mt = out.copy()
+    mt["match_type"] = [
+        v3.match_type(
+            r.decision, float(r.value_chain_score),
+            r.suggested_localization_model,
+            getattr(r, "value_chain_role", ""),
+            ev_level=v3.product_evidence_level(
+                str(opp_enrich.get(r.opportunity_name, {}).get("end_product", "") or ""),
+                comp_enrich.get(r.company_name, {}).get("evidenced_products") or []),
+            required_roles=opp_enrich.get(r.opportunity_name, {}).get("required_roles") or [])
+        for r in mt.itertuples()
+    ]
+    v3.enforce_single_anchor(mt)
+    mt_bad = int((mt["match_type"].values != out["match_type"].values).sum())
     st = {oid: v3.opportunity_status(list(zip(g["decision"], g["match_type"])))
-          for oid, g in out.groupby("opportunity_id")}
+          for oid, g in mt.groupby("opportunity_id")}
     st_bad = sum(1 for r in out.itertuples()
                  if st[r.opportunity_id] != r.opportunity_status)
     results[f"6. match_type + opportunity_status recomputed ({mt_bad}+{st_bad} mismatches)"] = mt_bad == 0 and st_bad == 0
@@ -210,7 +232,7 @@ def main():
         gg["_t"] = gg["decision"].map(tidx)
         base = gg.sort_values(["_t", "final_score"], ascending=[True, False],
                               kind="mergesort")
-        dup = ((base["corporate_group"] != "")
+        dup = ((base["corporate_group"].fillna("") != "")
                & base.duplicated(["corporate_group"]))
         exp_dup = dict(zip(base["company_name"], dup))
         for r in gg.itertuples():
