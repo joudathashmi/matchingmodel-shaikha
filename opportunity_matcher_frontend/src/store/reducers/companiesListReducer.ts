@@ -50,10 +50,10 @@ const companiesListReducer = (state = initialState, action: CompaniesListActionT
       };
 
     case SET_COMPANIES_LIST_FILTERS:
+      // Replace (do not merge) so cleared size/revenue/search defaults do not linger.
       return {
         ...state,
         filters: {
-          ...state.filters,
           ...action.payload,
         },
       };

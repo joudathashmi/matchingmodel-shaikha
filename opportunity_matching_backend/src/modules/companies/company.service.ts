@@ -105,13 +105,27 @@ export async function getCompanies(filters: ListCompaniesDTO) {
       : {}),
 
     ...(rhq_status !== undefined
-      ? { rhq_status: { equals: rhq_status ? "True" : "False", mode: "insensitive" } }
+      ? {
+          rhq_status: {
+            equals:
+              typeof rhq_status === "string"
+                ? ["true", "yes", "1"].includes(rhq_status.toLowerCase())
+                  ? "True"
+                  : "False"
+                : rhq_status
+                  ? "True"
+                  : "False",
+            mode: "insensitive",
+          },
+        }
       : {}),
     ...(q
       ? {
           OR: [
             { company_name: { contains: q, mode: Prisma.QueryMode.insensitive } },
             { company_sector: { contains: q, mode: Prisma.QueryMode.insensitive } },
+            { global_headquarters: { contains: q, mode: Prisma.QueryMode.insensitive } },
+            { ultimate_parent_company: { contains: q, mode: Prisma.QueryMode.insensitive } },
           ],
         }
       : {}),

@@ -1,12 +1,15 @@
 import styled, { keyframes } from "styled-components";
+import { createPortal } from "react-dom";
 import inpIcon from "../../assets/icons/search-01.svg";
 import logoImg from "../../assets/Login-page-icon/Ministry_of_Investment_Logo-white.svg";
 import { useDispatch, useSelector } from "react-redux";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchSearchRequest } from "../../store/actions/searchActions";
 import {
   selectSearchResults,
   selectSearchLoading,
+  selectSearchError,
 } from "../../store/selectors/searchSelectors";
 import { AppDispatch } from "../../store";
 
@@ -26,6 +29,7 @@ import {
   clearCompanyDetails,
   getCompanyDetailsRequest,
 } from "../../store/actions/getCompanyDetailsActions";
+import { setCompaniesListFilters } from "../../store/actions/companiesListActions";
 import typography from "../../common/typography";
 
 interface HeaderProps {
@@ -42,13 +46,20 @@ interface SearchResult {
 
 const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
   const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
   const results = useSelector(selectSearchResults);
   const loading = useSelector(selectSearchLoading);
+  const searchError = useSelector(selectSearchError);
   const [query, setQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null);
   const [showCompanyPopup, setShowCompanyPopup] = useState(false);
   const [showOpportunityPopup, setShowOpportunityPopup] = useState(false);
+  const [dropdownBox, setDropdownBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const companyDetails = useSelector(selectCompanyDetails);
   const companyLoading = useSelector(selectCompanyDetailsLoading);
@@ -57,8 +68,20 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
   const opportunityLoading = useSelector(selectOpportunityDetailsLoading);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateDropdownPosition = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setDropdownBox({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: rect.width,
+    });
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -98,6 +121,14 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
       dispatch(getOpportunityDetailsRequest(item.id));
       setShowOpportunityPopup(true);
       setShowCompanyPopup(false);
+    } else if (item.type === "sector") {
+      dispatch(
+        setCompaniesListFilters({
+          sectors: [item.name],
+          page: 1,
+        })
+      );
+      navigate("/companyProfile");
     }
   };
 
@@ -111,18 +142,30 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
   const handleCompanyClick = (_company: any) => {};
   const handleAiDecisionFilter = (_aiDecision: string) => {};
 
+  useLayoutEffect(() => {
+    if (!showDropdown) return;
+    updateDropdownPosition();
+    const onReposition = () => updateDropdownPosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [showDropdown, query, results.length, loading]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      const inShell = containerRef.current?.contains(target);
+      const inDropdown = dropdownRef.current?.contains(target);
+      if (!inShell && !inDropdown) {
         setShowDropdown(false);
       }
     };
 
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -132,6 +175,7 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
         inputRef.current?.focus();
         if (query) setShowDropdown(true);
       }
+      if (e.key === "Escape") setShowDropdown(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -141,6 +185,45 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
     if (!str) return "";
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
+
+  const dropdown =
+    showDropdown && dropdownBox
+      ? createPortal(
+          <Dropdown
+            ref={dropdownRef}
+            style={{
+              top: dropdownBox.top,
+              left: dropdownBox.left,
+              width: dropdownBox.width,
+            }}
+          >
+            {loading && <DropdownItem $muted>Scanning registry…</DropdownItem>}
+            {!loading && searchError && (
+              <DropdownItem $muted>Search unavailable: {searchError}</DropdownItem>
+            )}
+            {!loading && !searchError && results.length === 0 && (
+              <DropdownItem $muted>No matches found</DropdownItem>
+            )}
+            {!loading &&
+              !searchError &&
+              results.length > 0 &&
+              results.map((r: SearchResult) => (
+                <DropdownItem
+                  key={`${r.type}-${r.id}-${r.name}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleItemClick(r)}
+                >
+                  <TypePill>{capitalizeFirst(r.type)}</TypePill>
+                  <ResultText>
+                    <ResultName>{r.name}</ResultName>
+                    {r.extra ? <ResultMeta>{r.extra}</ResultMeta> : null}
+                  </ResultText>
+                </DropdownItem>
+              ))}
+          </Dropdown>,
+          document.body
+        )
+      : null;
 
   return (
     <>
@@ -184,31 +267,9 @@ const Header: React.FC<HeaderProps> = ({ subLabel, onMenuClick }) => {
               <KbdHint>⌘K</KbdHint>
             )}
           </SearchField>
-
-          {showDropdown && (
-            <Dropdown>
-              {loading && <DropdownItem $muted>Scanning registry…</DropdownItem>}
-              {!loading && results.length === 0 && (
-                <DropdownItem $muted>No matches found</DropdownItem>
-              )}
-              {!loading &&
-                results.length > 0 &&
-                results.map((r: SearchResult) => (
-                  <DropdownItem
-                    key={`${r.type}-${r.id}`}
-                    onClick={() => handleItemClick(r)}
-                  >
-                    <TypePill>{capitalizeFirst(r.type)}</TypePill>
-                    <ResultText>
-                      <ResultName>{r.name}</ResultName>
-                      {r.extra ? <ResultMeta>{r.extra}</ResultMeta> : null}
-                    </ResultText>
-                  </DropdownItem>
-                ))}
-            </Dropdown>
-          )}
         </SearchShell>
       </HeaderBar>
+      {dropdown}
 
       {showCompanyPopup && selectedItem && (
         <CompanyDetailPopup
@@ -480,11 +541,8 @@ const KbdHint = styled.span`
 `;
 
 const Dropdown = styled.div`
-  position: absolute;
-  top: calc(100% + 0.45rem);
-  left: 0;
-  right: 0;
-  background: rgba(14, 18, 32, 0.96);
+  position: fixed;
+  background: rgba(14, 18, 32, 0.98);
   backdrop-filter: blur(18px);
   color: #fff;
   border-radius: 14px;
@@ -492,9 +550,9 @@ const Dropdown = styled.div`
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(255, 255, 255, 0.03);
-  max-height: 320px;
+  max-height: min(360px, 55vh);
   overflow-y: auto;
-  z-index: 12000;
+  z-index: 30000;
 
   &::-webkit-scrollbar {
     width: 4px;

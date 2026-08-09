@@ -108,8 +108,9 @@ const HeaderWrapper = styled.div`
   grid-row: 1;
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 200;
   min-width: 0;
+  overflow: visible;
 `;
 
 const Backdrop = styled.button<{ $open: boolean }>`

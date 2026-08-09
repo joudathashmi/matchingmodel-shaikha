@@ -7,6 +7,19 @@ import { selectCompaniesListFilters } from "../../store/selectors/companiesListS
 import { CompaniesListFilters } from "../../store/types/companiesListTypes";
 import typography from "../../common/typography";
 
+const DEFAULT_COMPANY_SIZE = { min: 1, max: 500000 };
+const DEFAULT_REVENUE = { min: 1, max: 100000000000000 };
+/** Older builds capped size at 10k and hid most large employers from search. */
+const LEGACY_COMPANY_SIZE_MAX = 10000;
+
+function normalizeCompanySize(size?: { min: number; max: number }) {
+  if (!size) return { ...DEFAULT_COMPANY_SIZE };
+  if (size.min <= 1 && size.max === LEGACY_COMPANY_SIZE_MAX) {
+    return { ...DEFAULT_COMPANY_SIZE };
+  }
+  return size;
+}
+
 interface RangeValues {
   min: number;
   max: number;
@@ -35,8 +48,8 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
   // Ensure all properties are defined with default values
   const [localFilters, setLocalFilters] = useState<CompaniesListFilters>({
     sectors: currentReduxFilters.sectors || [],
-    company_size: currentReduxFilters.company_size || { min: 1, max: 10000 },
-    revenue: currentReduxFilters.revenue || { min: 1, max: 100000000000000 },
+    company_size: normalizeCompanySize(currentReduxFilters.company_size),
+    revenue: currentReduxFilters.revenue || { ...DEFAULT_REVENUE },
     presence_of_company_in_mena: currentReduxFilters.presence_of_company_in_mena || false,
     presence_in_saudi: currentReduxFilters.presence_in_saudi || false,
     rhq_status: currentReduxFilters.rhq_status || "false",
@@ -71,6 +84,26 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
       delete filtersToApply.rhq_status;
     }
 
+    // At full default ranges, do not constrain the API (avoids dropping
+    // large employers / null headcount rows when users only search by name).
+    const size = localFilters.company_size;
+    if (
+      !size ||
+      (size.min <= DEFAULT_COMPANY_SIZE.min && size.max >= DEFAULT_COMPANY_SIZE.max)
+    ) {
+      delete filtersToApply.company_size;
+    }
+    const rev = localFilters.revenue;
+    if (
+      !rev ||
+      (rev.min <= DEFAULT_REVENUE.min && rev.max >= DEFAULT_REVENUE.max)
+    ) {
+      delete filtersToApply.revenue;
+    }
+    if (!(localFilters.search || "").trim()) {
+      delete filtersToApply.search;
+    }
+
     if (onFilterChange) {
       onFilterChange(filtersToApply as CompaniesListFilters);
     }
@@ -103,8 +136,8 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
   useEffect(() => {
     setLocalFilters({
       sectors: currentReduxFilters.sectors || [],
-      company_size: currentReduxFilters.company_size || { min: 1, max: 10000 },
-      revenue: currentReduxFilters.revenue || { min: 1, max: 100000000000000 },
+      company_size: normalizeCompanySize(currentReduxFilters.company_size),
+      revenue: currentReduxFilters.revenue || { ...DEFAULT_REVENUE },
       presence_of_company_in_mena: currentReduxFilters.presence_of_company_in_mena || false,
       presence_in_saudi: currentReduxFilters.presence_in_saudi || false,
       rhq_status: currentReduxFilters.rhq_status || "false",
@@ -133,7 +166,7 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
   };
 
   const getCompanySize = () => {
-    const size = localFilters.company_size || { min: 1, max: 10000 };
+    const size = localFilters.company_size || { ...DEFAULT_COMPANY_SIZE };
     return {
       minFormatted: formatCompanySize(size.min),
       maxFormatted: formatCompanySize(size.max),
@@ -144,7 +177,7 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
 
   // Helper function to safely access revenue
   const getRevenue = () => {
-    return localFilters.revenue || { min: 1, max: 100000000000000 };
+    return localFilters.revenue || { ...DEFAULT_REVENUE };
   };
 
   // Helper function to safely access sectors
@@ -205,8 +238,8 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
   const clearAll = () => {
     const emptyFilters: CompaniesListFilters = {
       sectors: [],
-      company_size: { min: 1, max: 10000 },
-      revenue: { min: 1, max: 100000000000000 },
+      company_size: { ...DEFAULT_COMPANY_SIZE },
+      revenue: { ...DEFAULT_REVENUE },
       presence_of_company_in_mena: false,
       presence_in_saudi: false,
       rhq_status: "false",
@@ -321,13 +354,13 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
             </SliderHeader>
             <SliderWrapper>
               <RangeHighlight
-                left={(companySize.raw.min / 10000) * 100}
-                right={100 - (companySize.raw.max / 10000) * 100}
+                left={(companySize.raw.min / DEFAULT_COMPANY_SIZE.max) * 100}
+                right={100 - (companySize.raw.max / DEFAULT_COMPANY_SIZE.max) * 100}
               />
               <Range
                 type="range"
                 min="1"
-                max="10000"
+                max={DEFAULT_COMPANY_SIZE.max}
                 value={companySize.raw.min}
                 onChange={(e) =>
                   updateCompanySize(
@@ -340,7 +373,7 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
               <Range
                 type="range"
                 min="1"
-                max="10000"
+                max={DEFAULT_COMPANY_SIZE.max}
                 value={companySize.raw.max}
                 onChange={(e) =>
                   updateCompanySize(
@@ -353,7 +386,7 @@ const CompanyFilter: React.FC<CompanyFilterProps> = ({ onFilterChange }) => {
 
             <ValuesRow>
               <Value>1</Value>
-              <Value>10,000</Value>
+              <Value>{DEFAULT_COMPANY_SIZE.max.toLocaleString("en-US")}</Value>
             </ValuesRow>
           </SliderSection>
 

@@ -12,9 +12,13 @@ function* fetchSearchSaga(action: SearchActionTypes): any {
   try {
     const { query } = action.payload;
     const data = yield call(globalSearchService.search, query);
-    yield put(fetchSearchSuccess(data.results));
+    yield put(fetchSearchSuccess(Array.isArray(data?.results) ? data.results : []));
   } catch (error: any) {
-    yield put(fetchSearchFailure(error.message));
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Search failed";
+    yield put(fetchSearchFailure(message));
   }
 }
 
