@@ -15,6 +15,8 @@ export interface CompanyTableTypes{
   company_sector: string;
   year_founded: number;
   company_profile: string;
+  website_url?: string | null;
+  website?: string | null;
   product_services: string;
   legal_structure: string;
   type_of_entity: string;

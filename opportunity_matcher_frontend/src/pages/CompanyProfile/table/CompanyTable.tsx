@@ -2,6 +2,10 @@ import React from "react";
 import styled from "styled-components";
 import { CompanyTableTypes } from "../CompanyTypes";
 import typography from "../../../common/typography";
+import {
+  normalizeWebsiteUrl,
+  websiteDisplayHost,
+} from "../../../common/websiteUrl";
 
 
 interface CellProps {
@@ -82,11 +86,29 @@ const CompanyTable: React.FC<CompanyTableProps> = ({ companie, onCompanyClick })
                 </TooltipWrapper> */}
               </TableCell>
               <TableCell padding="12px 0px 12px 0px" >{c.year_founded}</TableCell>
-              <TableCell isFirst>
-                <WebsiteLink href={c.website} target="_blank">
-                  <WebsiteIcon>🌐</WebsiteIcon>
-                  {c.website}
-                </WebsiteLink>
+              <TableCell
+                isFirst
+                onClick={(e) => e.stopPropagation()}
+              >
+                {(() => {
+                  const href = normalizeWebsiteUrl(
+                    c.website_url || c.website
+                  );
+                  if (!href) {
+                    return <Muted>—</Muted>;
+                  }
+                  return (
+                    <WebsiteLink
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={href}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {websiteDisplayHost(href)}
+                    </WebsiteLink>
+                  );
+                })()}
               </TableCell>
               <TableCell isFirst style={{ color: "rgba(5, 234, 160, 1)" }} padding="12px 5px 12px 0px">
                 {c.global_headquarters}
@@ -246,7 +268,13 @@ const WebsiteLink = styled.a`
 
   &:hover {
     background: rgba(111, 185, 255, 0.2);
+    text-decoration: underline;
   }
+`;
+
+const Muted = styled.span`
+  color: rgba(255, 255, 255, 0.35);
+  font-size: ${typography.tableDatas.fontSize};
 `;
 
 const TooltipWrapper = styled.div`
@@ -282,11 +310,3 @@ const Tooltip = styled.span`
   }
 `;
 
-const WebsiteIcon = styled.span`
-  font-size: ${typography.Value.fontSize};
-  font-weight: ${typography.Value.fontWeight};
-  line-height: 1;
-  display: inline-block;
-
-  
-`;

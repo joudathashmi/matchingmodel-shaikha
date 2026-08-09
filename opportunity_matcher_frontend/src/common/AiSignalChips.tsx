@@ -11,7 +11,7 @@ import {
 const SignalStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.35rem;
   width: 100%;
   min-width: 0;
 `;
@@ -20,7 +20,7 @@ const ChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   margin: 0;
   width: 100%;
   min-width: 0;
@@ -81,9 +81,9 @@ const Chip = styled.span<{ $tone?: "high" | "medium" | "low" | "neutral" | "risk
 `;
 
 const ValueChainNote = styled.p`
-  margin: 0;
+  margin: 0.1rem 0 0;
   font-size: 0.78rem;
-  line-height: 1.5;
+  line-height: 1.45;
   color: rgba(255, 255, 255, 0.62);
   word-break: break-word;
 `;
@@ -91,9 +91,8 @@ const ValueChainNote = styled.p`
 const EvidenceGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  /* Keep clear of the role note / chips above even when the parent has no gap */
-  margin: 0.85rem 0 0;
+  gap: 0.65rem;
+  margin: 0.55rem 0 0;
   width: 100%;
 
   @media (max-width: 720px) {

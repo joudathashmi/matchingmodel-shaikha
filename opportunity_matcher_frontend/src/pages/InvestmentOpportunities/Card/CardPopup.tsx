@@ -10,6 +10,7 @@ import 'react-tooltip/dist/react-tooltip.css';
 import { Link } from "react-router-dom";
 // import { Document, Page, pdfjs } from 'react-pdf';
 import typography from "../../../common/typography";
+import { normalizeWebsiteUrl } from "../../../common/websiteUrl";
 // pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface CardPopupProps {
@@ -634,11 +635,15 @@ const CardPopup: React.FC<CardPopupProps> = ({ investment, onClose, detailedData
                     <Para style={{ marginTop: "0.3rem" }}>
                       {matching.ai_explanation || 'N/A'}
                     </Para>
-                    <OppLink target="_blank"
-                      rel="noopener noreferrer"
-                      href={matching.company.website_url}>
-                      Click to View Company Website
-                    </OppLink>
+                    {normalizeWebsiteUrl(matching.company.website_url) ? (
+                      <OppLink
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href={normalizeWebsiteUrl(matching.company.website_url)!}
+                      >
+                        Click to View Company Website
+                      </OppLink>
+                    ) : null}
                   </div>
                 </ContentContainer>))
               }

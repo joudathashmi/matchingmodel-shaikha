@@ -1092,7 +1092,7 @@ const BtnTooltip = styled.div`
 const MatchBreakdownDisplay = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.5rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;

@@ -878,7 +878,7 @@ const MatchHeader = styled.div`
 const MatchInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.5rem;
   min-width: 0;
 `;
 
@@ -893,8 +893,9 @@ const SidePanel = styled.div`
 const IdentityBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
   min-width: 0;
+  margin-bottom: 0.1rem;
 `;
 
 const MatchTitle = styled.span`

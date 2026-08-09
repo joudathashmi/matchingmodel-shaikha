@@ -1,6 +1,10 @@
 import React from "react";
 import styled from "styled-components";
 import typography from "../../../common/typography";
+import {
+  normalizeWebsiteUrl,
+  websiteDisplayHost,
+} from "../../../common/websiteUrl";
 
 
 const GridWrapper = styled.div`
@@ -211,13 +215,21 @@ const CompanyGrid: React.FC<CompanyGridProps> = ({ companies, onCompanyClick, du
             </Cell>
             <Cell>
               <Label>Website</Label>
-              {c.website_url ? (
-                <Website href={c.website_url} target="_blank" rel="noopener noreferrer">
-                  {c.website_url}
-                </Website>
-              ) : (
-                <Value>-</Value>
-              )}
+              {(() => {
+                const href = normalizeWebsiteUrl(c.website_url);
+                if (!href) return <Value>-</Value>;
+                return (
+                  <Website
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={href}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {websiteDisplayHost(c.website_url)}
+                  </Website>
+                );
+              })()}
             </Cell>
             <Cell>
               <Label>Country</Label>

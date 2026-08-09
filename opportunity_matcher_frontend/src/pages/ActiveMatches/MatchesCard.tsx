@@ -1,6 +1,6 @@
 import styled, { css, keyframes } from 'styled-components';
 import InfrastructureCard from './InfrastructureCard';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { getSectorCounts } from '../../store/actions/actionSectorActions';
@@ -12,6 +12,13 @@ import { getActiveMatches } from '../../store/actions/filterMatchesActions';
 import { LoadingSpinnerWithMessage } from '../../common/LoaderSpinner&ErrorLayout/LoadingSpinnerWithMessage';
 import { ErrorMessage } from '../../common/LoaderSpinner&ErrorLayout/ErrorMessage';
 import typography from '../../common/typography';
+import { toastError, toastSuccess } from '../../common/toast';
+import {
+  downloadMatchesExcelCsv,
+  downloadMatchesWord,
+  fetchAllFilteredMatches,
+  MatchExportFilters,
+} from './exportMatches';
 
 const MatchesCard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -42,7 +49,10 @@ const MatchesCard: React.FC = () => {
   const [selectedAIDecisions, setSelectedAIDecisions] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(5);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<"csv" | "docx" | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   
   const isDraggingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -255,10 +265,85 @@ const MatchesCard: React.FC = () => {
     return ((value - min) / (max - min)) * 100;
   };
 
+  const exportFilters: MatchExportFilters = useMemo(() => {
+    const companyNames = companies
+      .filter((c) => selectedCompanies.includes(c.id))
+      .map((c) => c.company_name);
+    const sectorNames = sectorCounts
+      .filter((_, idx) => selectedSectors.includes(idx + 1))
+      .map((s) => s.sector);
+    const aiDecision =
+      selectedAIDecisions.length > 0
+        ? ["Yes", "No"][selectedAIDecisions[0] - 1]
+        : undefined;
+    return {
+      sectors: sectorNames,
+      companies: companyNames,
+      ai_decision: aiDecision,
+      decision_tier: decisionTier,
+      pursue_only: pursueOnly || undefined,
+      final_score: {
+        min: minValue / 100,
+        max: maxValue / 100,
+      },
+    };
+  }, [
+    companies,
+    selectedCompanies,
+    sectorCounts,
+    selectedSectors,
+    selectedAIDecisions,
+    decisionTier,
+    pursueOnly,
+    minValue,
+    maxValue,
+  ]);
+
+  const runExport = async (format: "csv" | "docx") => {
+    if (exporting) return;
+    setExporting(format);
+    setExportOpen(false);
+    try {
+      toastSuccess(
+        format === "csv"
+          ? "Preparing Excel file…"
+          : "Preparing Word briefing…"
+      );
+      const { matches, meta } = await fetchAllFilteredMatches(exportFilters);
+      if (!matches.length) {
+        toastError("No matches to export for the current filters.");
+        return;
+      }
+      if (format === "csv") {
+        downloadMatchesExcelCsv(matches, meta);
+      } else {
+        await downloadMatchesWord(matches, meta);
+      }
+      const capped =
+        meta.exportedCount < meta.totalAvailable
+          ? ` (first ${meta.exportedCount} of ${meta.totalAvailable})`
+          : "";
+      toastSuccess(
+        `Exported ${meta.exportedCount} match${
+          meta.exportedCount === 1 ? "" : "es"
+        }${capped}.`
+      );
+    } catch (e: any) {
+      toastError(
+        e?.response?.data?.message || e?.message || "Export failed"
+      );
+    } finally {
+      setExporting(null);
+    }
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setActiveDropdown(null);
+      }
+      if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
+        setExportOpen(false);
       }
     };
 
@@ -287,10 +372,41 @@ const MatchesCard: React.FC = () => {
   return (
     <MainContent data-tour="matches-workspace">
       <WorkbenchIntro>
-        <WorkbenchTitle>Matches</WorkbenchTitle>
-        <WorkbenchSub>
-          Ranked company-opportunity pairs. Open a case for evidence, then move deals into Pursuit.
-        </WorkbenchSub>
+        <IntroTop>
+          <div>
+            <WorkbenchTitle>Matches</WorkbenchTitle>
+            <WorkbenchSub>
+              Ranked company-opportunity pairs. Open a case for evidence, then
+              move deals into Pursuit.
+            </WorkbenchSub>
+          </div>
+          <ExportWrap ref={exportRef}>
+            <ExportBtn
+              type="button"
+              disabled={Boolean(exporting)}
+              onClick={() => setExportOpen((o) => !o)}
+              aria-expanded={exportOpen}
+            >
+              {exporting
+                ? exporting === "csv"
+                  ? "Exporting Excel…"
+                  : "Exporting Word…"
+                : "Export"}
+            </ExportBtn>
+            {exportOpen && !exporting && (
+              <ExportMenu>
+                <ExportOption type="button" onClick={() => void runExport("csv")}>
+                  Excel spreadsheet (.csv)
+                  <ExportHint>Full columns · opens in Excel</ExportHint>
+                </ExportOption>
+                <ExportOption type="button" onClick={() => void runExport("docx")}>
+                  Word briefing (.docx)
+                  <ExportHint>Summary, shortlist table, evidence notes</ExportHint>
+                </ExportOption>
+              </ExportMenu>
+            )}
+          </ExportWrap>
+        </IntroTop>
         {(pursueOnly || decisionTier) && (
           <FocusBanner>
             Showing{" "}
@@ -505,6 +621,15 @@ const MainContent = styled.main`
 const WorkbenchIntro = styled.div`
   margin: 0 0 1.15rem;
 `;
+
+const IntroTop = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
 const WorkbenchTitle = styled.h1`
   margin: 0 0 0.35rem 0;
   font-size: ${typography.pageTitle.fontSize};
@@ -520,6 +645,75 @@ const WorkbenchSub = styled.p`
   font-weight: ${typography.paragraph.fontWeight};
   color: rgba(255, 255, 255, 0.62);
   line-height: 1.45;
+`;
+
+const ExportWrap = styled.div`
+  position: relative;
+  flex-shrink: 0;
+`;
+
+const ExportBtn = styled.button`
+  border: 1px solid rgba(0, 200, 140, 0.4);
+  background: rgba(0, 255, 136, 0.1);
+  color: #9ef0c8;
+  border-radius: 8px;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 255, 136, 0.16);
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: default;
+  }
+`;
+
+const ExportMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 40;
+  min-width: 240px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 22, 36, 0.98);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 0.35rem;
+`;
+
+const ExportOption = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 7px;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+`;
+
+const ExportHint = styled.span`
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.3;
 `;
 
 const FocusBanner = styled.div`

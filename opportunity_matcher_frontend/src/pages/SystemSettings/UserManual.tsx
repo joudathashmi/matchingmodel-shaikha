@@ -89,7 +89,9 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          Open <Link to="/match-workbench">Matches</Link> to see scored pairs.
+            Open <Link to="/match-workbench">Matches</Link> to see scored pairs.
+            Use <em>Export</em> for an Excel spreadsheet or Word briefing of the
+            filtered list.
         </p>
         <ul>
           <li>

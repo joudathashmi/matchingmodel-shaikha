@@ -12,6 +12,10 @@ import {
 } from "../../../store/services/rematchCompanyService";
 import { getCompanyDetailsRequest } from "../../../store/actions/getCompanyDetailsActions";
 import { toastError, toastSuccess } from "../../../common/toast";
+import {
+  normalizeWebsiteUrl,
+  websiteDisplayHost,
+} from "../../../common/websiteUrl";
 import { AppDispatch } from "../../../store";
 
 
@@ -434,8 +438,22 @@ const CompanyDetailPopup: React.FC<CompanyDetailPopupProps> = ({
                     </li>
                     <li>
                       <span>Website:</span>
-                      <Website href={companyDetails?.website_url || undefined} target="_blank" rel="noopener noreferrer">
-                        {companyDetails?.website_url || "N/A"}</Website>
+                      {(() => {
+                        const href = normalizeWebsiteUrl(
+                          companyDetails?.website_url
+                        );
+                        if (!href) return <span>N/A</span>;
+                        return (
+                          <Website
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={href}
+                          >
+                            {websiteDisplayHost(href)}
+                          </Website>
+                        );
+                      })()}
                     </li>
 
 
