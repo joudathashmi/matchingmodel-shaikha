@@ -74,8 +74,14 @@ def parse_confidence(v):
 
 
 def load_companies_from_db(limit: int | None = None,
-                           require_profile: bool = True) -> pd.DataFrame:
-    """Load Company rows shaped like the Excel loader output, plus db_id."""
+                           require_profile: bool = True,
+                           company_id: int | None = None,
+                           company_name: str | None = None) -> pd.DataFrame:
+    """Load Company rows shaped like the Excel loader output, plus db_id.
+
+    Optional company_id / company_name filters support on-demand rematch.
+    company_name uses case-insensitive exact match first, then ILIKE contains.
+    """
     sql = '''
         SELECT id AS db_id,
                company_name,
@@ -85,14 +91,41 @@ def load_companies_from_db(limit: int | None = None,
         FROM "Company"
         WHERE coalesce(company_name, '') <> ''
     '''
+    params: list = []
+    if company_id is not None:
+        sql += " AND id = %(company_id)s"
+        params.append(("company_id", int(company_id)))
+    if company_name:
+        # Prefer exact (case-insensitive); caller may widen if empty.
+        sql += " AND lower(company_name) = lower(%(company_name)s)"
+        params.append(("company_name", company_name.strip()))
     if require_profile:
         sql += " AND length(coalesce(company_profile, '')) > 20"
     sql += " ORDER BY id"
     if limit:
         sql += f" LIMIT {int(limit)}"
 
+    bind = {k: v for k, v in params}
     with sql_engine().connect() as conn:
-        df = pd.read_sql(sql, conn)
+        df = pd.read_sql(sql, conn, params=bind or None)
+
+    # Fallback: contains match when exact name missed
+    if df.empty and company_name and company_id is None:
+        sql2 = '''
+            SELECT id AS db_id,
+                   company_name,
+                   coalesce(company_sector, '') AS "Sector",
+                   coalesce(company_profile, '') AS company_profile,
+                   coalesce(product_services, '') AS "product and Services"
+            FROM "Company"
+            WHERE coalesce(company_name, '') <> ''
+              AND company_name ILIKE %(q)s
+        '''
+        if require_profile:
+            sql2 += " AND length(coalesce(company_profile, '')) > 20"
+        sql2 += " ORDER BY length(company_name) ASC, id LIMIT 5"
+        with sql_engine().connect() as conn:
+            df = pd.read_sql(sql2, conn, params={"q": f"%{company_name.strip()}%"})
 
     if df.empty:
         raise RuntimeError('No companies found in "Company" table')
@@ -270,6 +303,150 @@ def clear_matching_output(model_version: str | None = MODEL_VERSION) -> int:
     return n
 
 
+def clear_matches_for_company(company_id: int) -> int:
+    """Delete MatchingOutput (+ agreements) for one company only.
+
+    Used by on-demand rematch so a single-company refresh never wipes the
+    rest of the portfolio.
+    """
+    cid = int(company_id)
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'DELETE FROM "MatchAgreement" WHERE "matchId" IN '
+                '(SELECT id FROM "MatchingOutput" WHERE "companyId" = %s)',
+                (cid,))
+            cur.execute(
+                'DELETE FROM "MatchingOutput" WHERE "companyId" = %s',
+                (cid,))
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
+def resolve_company_from_db(company_id: int | None = None,
+                            company_name: str | None = None) -> dict:
+    """Resolve a single Company row for on-demand rematch.
+
+    Returns dict with id, company_name, company_sector, company_profile,
+    product_services. Raises LookupError if not found / ambiguous.
+    """
+    if company_id is None and not company_name:
+        raise ValueError("company_id or company_name is required")
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            if company_id is not None:
+                cur.execute(
+                    'SELECT id, company_name, company_sector, company_profile, '
+                    'product_services FROM "Company" WHERE id = %s',
+                    (int(company_id),))
+                row = cur.fetchone()
+                if not row:
+                    raise LookupError(f"No company with id={company_id}")
+                cols = [d[0] for d in cur.description]
+                return dict(zip(cols, row))
+
+            name = company_name.strip()
+            cur.execute(
+                'SELECT id, company_name, company_sector, company_profile, '
+                'product_services FROM "Company" '
+                'WHERE lower(company_name) = lower(%s) '
+                'ORDER BY id LIMIT 5',
+                (name,))
+            rows = cur.fetchall()
+            if not rows:
+                cur.execute(
+                    'SELECT id, company_name, company_sector, company_profile, '
+                    'product_services FROM "Company" '
+                    'WHERE company_name ILIKE %s '
+                    'ORDER BY length(company_name) ASC, id LIMIT 5',
+                    (f"%{name}%",))
+                rows = cur.fetchall()
+            if not rows:
+                raise LookupError(f"No company matching name={name!r}")
+            cols = [d[0] for d in cur.description]
+            if len(rows) > 1:
+                # Prefer exact-case-insensitive single; else first shortest
+                exact = [r for r in rows if str(r[1]).lower() == name.lower()]
+                pick = exact[0] if exact else rows[0]
+            else:
+                pick = rows[0]
+            return dict(zip(cols, pick))
+
+
+def _ui_explanation(r) -> str | None:
+    """Build a 3-part explanation the frontend accordion expects.
+
+    Active Matches parses numbered lines into:
+      [0] Profile and Product Match
+      [1] Strategic Capability Alignment
+      [2] Value Proposition
+    """
+    strengths = _s(r.get("strengths"))
+    risks = _s(r.get("risks"))
+    engagement = _s(r.get("recommended_engagement"))
+    summary = _s(r.get("executive_summary"))
+    match_reason = _s(r.get("match_reason"))
+    profile = _s(r.get("profile_match_reason"))
+    product = _s(r.get("product_match_reason"))
+
+    part1 = strengths or profile or product or summary
+    part2 = engagement or product or match_reason or risks
+    part3 = summary or match_reason or risks or engagement
+
+    parts = [p for p in (part1, part2, part3) if p]
+    # Deduplicate while preserving order
+    seen = set()
+    uniq = []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            uniq.append(p)
+    if not uniq:
+        return None
+    # Pad to 3 slots so each accordion has content when only 1-2 fields exist
+    while len(uniq) < 3:
+        uniq.append(uniq[-1])
+    return "\n".join(f"{i}. {p}" for i, p in enumerate(uniq[:3], 1))
+
+
+def _ui_match_reason(r) -> str | None:
+    """JSON array string for the GUI Match Reason list."""
+    raw = r.get("match_reason")
+    items: list[str] = []
+    if isinstance(raw, list):
+        items = [str(x).strip() for x in raw if str(x).strip()]
+    else:
+        s = _s(raw)
+        if s:
+            parsed = None
+            if s.startswith("["):
+                try:
+                    parsed = json.loads(s)
+                except Exception:
+                    try:
+                        # Only repair true single-quoted JSON arrays, not apostrophes
+                        if s.startswith("['") or s.startswith('["'):
+                            parsed = json.loads(s.replace("'", '"'))
+                    except Exception:
+                        parsed = None
+            if isinstance(parsed, list):
+                items = [str(x).strip() for x in parsed if str(x).strip()]
+            elif parsed is not None:
+                items = [str(parsed).strip()]
+            else:
+                parts = [p.strip() for p in re.split(r"(?<=\.)\s+", s) if p.strip()]
+                items = parts if len(parts) > 1 else [s]
+    if not items:
+        for key in ("strengths", "executive_summary", "profile_match_reason"):
+            v = _s(r.get(key))
+            if v:
+                items = [v]
+                break
+    return json.dumps(items) if items else None
+
+
 def _row_params(r, human: dict, now) -> dict:
     cname = str(r["company_name"]).strip()
     oname = str(r["opportunity_name"]).strip()
@@ -292,11 +469,11 @@ def _row_params(r, human: dict, now) -> dict:
         ai_score=float(r["ai_score"]),
         ai_decision="Yes" if r["decision"] in YES_TIERS else "No",
         final_score=float(r["final_score"]),
-        ai_explanation=_s(r.get("executive_summary")),
+        ai_explanation=_ui_explanation(r),
         rank=int(r["rank"]),
-        ai_insight=_s(r.get("strengths")),
+        ai_insight=_s(r.get("strengths")) or _s(r.get("executive_summary")),
         suggested_plan=json.dumps(plan) if plan else None,
-        match_reason=_s(r.get("match_reason")),
+        match_reason=_ui_match_reason(r),
         decision_tier=r["decision"],
         confidence_score=conf_num,
         confidence_label=conf_label,

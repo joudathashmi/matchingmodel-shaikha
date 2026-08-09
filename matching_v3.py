@@ -318,7 +318,7 @@ BM_CLOSE = {
 
 def business_model_cap(company_bm: str, needed_bm: str) -> float:
     """Ceiling on profile_similarity from business-model compatibility.
-    Identical models cap at 0.85 — BM match alone cannot unlock a perfect
+    Identical models cap at 0.85 - BM match alone cannot unlock a perfect
     profile score (audit D2). Unknown models cannot be verified as a match."""
     if not company_bm or not needed_bm:
         return 0.70
@@ -1473,8 +1473,8 @@ def main():
     ap.add_argument("--fresh-gate", action="store_true",
                     help="ignore the gate verdict cache and re-vote every pair")
     args = ap.parse_args()
-    # Exported rows must receive the full panel, not the 1-vote light path —
-    # otherwise a cached 3/3 Direct on rank 4–5 is wrongly capped at Potential.
+    # Exported rows must receive the full panel, not the 1-vote light path -
+    # otherwise a cached 3/3 Direct on rank 4-5 is wrongly capped at Potential.
     if args.top_n < args.narrative_top:
         print(f"Raising --top-n from {args.top_n} to {args.narrative_top} "
               f"so the export slice is fully gated.")
@@ -1699,7 +1699,7 @@ def main():
             for idx, (fit, conf, expl, model, agree) in ex.map(_light, list(light.iterrows())):
                 df.at[idx, "gate"] = fit
                 df.at[idx, "gate_agreement"] = agree
-                # Cached full-panel verdicts must keep full depth — otherwise a
+                # Cached full-panel verdicts must keep full depth - otherwise a
                 # reused 3/3 Partial is wrongly capped at Potential Match.
                 n_votes = (int(str(agree).split("/")[1])
                            if "/" in str(agree) else 1)
