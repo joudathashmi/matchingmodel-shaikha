@@ -36,7 +36,7 @@ const ChangePasswordPage: React.FC = () => {
       const res = await changePassword(currentPassword, newPassword);
       dispatch(passwordChanged());
       toastSuccess(res.message || "Password updated");
-      navigate("/match-workbench", { replace: true });
+      navigate("/portfolio", { replace: true });
     } catch (e: any) {
       toastError(
         e?.response?.data?.message || e?.message || "Could not update password"

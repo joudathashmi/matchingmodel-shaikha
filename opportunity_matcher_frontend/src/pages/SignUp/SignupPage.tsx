@@ -130,7 +130,7 @@ const SignupPage: React.FC = () => {
       
       // Navigate after successful signup with a slight delay to show the toast
       setTimeout(() => {
-        navigate("/match-workbench");
+        navigate("/portfolio");
       }, 2000);
     } else {
       // Show validation errors if form is not valid

@@ -95,7 +95,7 @@ const LoginPage: React.FC = () => {
       markTourPending();
 
       const timer = setTimeout(() => {
-        navigate("/match-workbench");
+        navigate("/portfolio");
       }, 500);
 
       return () => clearTimeout(timer);
