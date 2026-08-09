@@ -798,30 +798,3 @@ const ErrorText = styled.div`
     margin-top: 1rem;
   }
 `;
-
-// New components for signup option
-const ToggleFormText = styled.p`
-  color: #c2c7cc;
-  margin: 0;
-  font-size: ${typography.pageTitleSmall.fontSize};
-  font-weight: ${typography.pageTitleSmall.fontWeight};
-`;
-
-const ToggleFormButton = styled.button`
-  background: transparent;
-  border: none;
-  color: #00d084;
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: ${typography.button.fontSize};
-  font-weight: ${typography.button.fontWeight};
-  
-  &:hover {
-    color: #00b874;
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
