@@ -279,52 +279,44 @@ const LoginPage: React.FC = () => {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
 
-          <SsoDivider>
-            <SsoDividerLine />
-            <SsoDividerText>or</SsoDividerText>
-            <SsoDividerLine />
-          </SsoDivider>
+          {ENABLE_SSO && (
+            <>
+              <SsoDivider>
+                <SsoDividerLine />
+                <SsoDividerText>or</SsoDividerText>
+                <SsoDividerLine />
+              </SsoDivider>
 
-          <SsoButton
-            type="button"
-            disabled={!ENABLE_SSO || loading}
-            title={
-              ENABLE_SSO
-                ? `Continue with ${SSO_PROVIDER_LABEL}`
-                : `${SSO_PROVIDER_LABEL} is not enabled for this environment`
-            }
-            onClick={() => {
-              if (!ENABLE_SSO) return;
-              toastError("SSO start is not fully configured yet.");
-            }}
-          >
-            Continue with {SSO_PROVIDER_LABEL}
-            {!ENABLE_SSO && <SsoBadge>Disabled</SsoBadge>}
-          </SsoButton>
+              <SsoButton
+                type="button"
+                disabled={loading}
+                title={`Continue with ${SSO_PROVIDER_LABEL}`}
+                onClick={() => {
+                  toastError("SSO start is not fully configured yet.");
+                }}
+              >
+                Continue with {SSO_PROVIDER_LABEL}
+              </SsoButton>
+            </>
+          )}
 
-          <SecureText>Secure login - authorised officers only</SecureText>
-          <FormOptionsContainer>
+          <FooterStack>
             <ForgotPasswordLink to="/forgot-password">
               Forgot password?
             </ForgotPasswordLink>
-            <ToggleFormText>
-              Need an account? Contact your administrator or{" "}
+            <HelpLine>
+              Need access? Contact{" "}
               <DisclaimerLink href="mailto:DBI@misa.gov.sa">
                 DBI@misa.gov.sa
               </DisclaimerLink>
-            </ToggleFormText>
-          </FormOptionsContainer>
+            </HelpLine>
+            <SecureText>Authorised officers only</SecureText>
+          </FooterStack>
 
           <LogoParent>
             <BottomLogo src={loginBottomLogo} alt="MISA Logo" />
           </LogoParent>
           <LogoText>Powered by MISA Data Dynamo</LogoText>
-
-          {/* Add this disclaimer below the toggle form text */}
-          <DisclaimerText>
-            Disclaimer: This platform is for authorised users only. For any information please contact{' '}
-            <DisclaimerLink href="mailto:DBI@misa.gov.sa">DBI@misa.gov.sa</DisclaimerLink>
-          </DisclaimerText>
 
         </LoginBox>
       </LoginContainer>
@@ -334,67 +326,53 @@ const LoginPage: React.FC = () => {
 
 export default LoginPage;
 
-const SecureText = styled.p`
+const FooterStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1.25rem 0 0.75rem;
   text-align: center;
-  color: #8a8f98;
-  margin: 1.2rem 0 1.2rem 0;
-  font-size: ${typography.pageTitleSmall.fontSize};
-  font-weight: ${typography.pageTitleSmall.fontWeight};
-  line-height: 1.4;
-  padding: 0 1rem;
-  opacity: 0.8;
-
-  @media (min-width: 2560px) {
-    margin: 2rem 0 2rem 0;
-  }
 `;
-const DisclaimerText = styled.p`
-  text-align: center;
+
+const SecureText = styled.p`
+  margin: 0;
   color: #8a8f98;
-  margin: 0.5rem 0 0rem 0;
   font-size: ${typography.pageTitleSmall.fontSize};
   font-weight: ${typography.pageTitleSmall.fontWeight};
   line-height: 1.4;
-  padding: 0 1rem;
-  opacity: 0.8;
+  opacity: 0.85;
+`;
 
-  @media (min-width: 2560px) {
-    margin: 1rem 0 0rem 0;
-  }
+const HelpLine = styled.p`
+  margin: 0;
+  color: #c2c7cc;
+  font-size: ${typography.pageTitleSmall.fontSize};
+  font-weight: ${typography.pageTitleSmall.fontWeight};
+  line-height: 1.45;
+  max-width: 22rem;
 `;
 
 const DisclaimerLink = styled.a`
   color: #00d084;
-  font-size: ${typography.button.fontSize};
+  font-size: inherit;
   font-weight: ${typography.button.fontWeight};
   text-decoration: none;
+  white-space: nowrap;
   transition: color 0.2s ease;
-  
+
   &:hover {
     color: #00b874;
     text-decoration: underline;
   }
-
-  @media (min-width: 2560px) {
-  }
-`;
-
-const FormOptionsContainer = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 1rem 0;
-
-  @media (min-width: 2560px) {
-    margin: 1rem 0;
-  }
 `;
 
 const ForgotPasswordLink = styled(Link)`
-  color: rgba(232, 238, 245, 0.85);
+  color: rgba(232, 238, 245, 0.92);
   text-decoration: none;
   font-size: ${typography.button.fontSize};
   font-weight: ${typography.button.fontWeight};
+  white-space: nowrap;
   transition: color 0.2s ease;
 
   &:hover {
@@ -688,17 +666,6 @@ const SsoButton = styled.button`
     opacity: 0.55;
     cursor: not-allowed;
   }
-`;
-
-const SsoBadge = styled.span`
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0.15rem 0.4rem;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.55);
 `;
 
 const Button = styled.button<{ $isValid: boolean; $loading: boolean }>`
