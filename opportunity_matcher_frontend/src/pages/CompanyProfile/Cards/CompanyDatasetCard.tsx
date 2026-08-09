@@ -240,6 +240,7 @@ const CompanyDatasetCard: React.FC<CompanyDatasetCardProps> = ({ filters = {} })
       company_sector: company.company_sector || company.sector || "Unknown",
       product_services: company.product_services || "Unknown",
       year_founded: company.year_founded || company.yearFounded || 0,
+      website_url: company.website_url || company.website || null,
       global_headquarters: company.global_headquarters || company.country || "Unknown",
       number_of_employees: company.number_of_employees || company.employees || 0,
       revenue_usd: company.revenue_usd || company.revenue || 0,
