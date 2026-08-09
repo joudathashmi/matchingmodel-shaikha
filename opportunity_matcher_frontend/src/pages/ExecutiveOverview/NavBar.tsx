@@ -20,7 +20,8 @@ import {
   selectLogoutMessage,
   selectLogoutError,
 } from "../../store/selectors/authLogoutSelectors";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import typography from "../../common/typography";
 import { AppDispatch } from "../../store";
 import { getUserRoleRequest } from "../../store/actions/getUserRoleActions";
@@ -58,6 +59,7 @@ export default function MenuBar({ onNavigate }: MenuBarProps) {
 
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const loading = useSelector(selectLogoutLoading);
   const message = useSelector(selectLogoutMessage);
@@ -75,6 +77,12 @@ export default function MenuBar({ onNavigate }: MenuBarProps) {
       .join("") || "U";
 
   const handleLogout = () => {
+    if (loading) return;
+    setConfirmLogout(true);
+  };
+
+  const confirmLogOff = () => {
+    setConfirmLogout(false);
     dispatch(logoutRequest());
   };
 
@@ -222,6 +230,46 @@ export default function MenuBar({ onNavigate }: MenuBarProps) {
           </UserInfoText>
         </UserProfile>
       </SidebarFooter>
+
+      {confirmLogout &&
+        createPortal(
+          <ConfirmOverlay
+            role="presentation"
+            onClick={() => !loading && setConfirmLogout(false)}
+          >
+            <ConfirmCard
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="logout-confirm-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ConfirmTitle id="logout-confirm-title">
+                Log off?
+              </ConfirmTitle>
+              <ConfirmBody>
+                Are you sure you want to log off? You will need to sign in again
+                to return to the desk.
+              </ConfirmBody>
+              <ConfirmActions>
+                <ConfirmSecondary
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setConfirmLogout(false)}
+                >
+                  Cancel
+                </ConfirmSecondary>
+                <ConfirmPrimary
+                  type="button"
+                  disabled={loading}
+                  onClick={confirmLogOff}
+                >
+                  {loading ? "Logging out…" : "Log off"}
+                </ConfirmPrimary>
+              </ConfirmActions>
+            </ConfirmCard>
+          </ConfirmOverlay>,
+          document.body
+        )}
     </Sidebar>
   );
 }
@@ -447,4 +495,89 @@ const UserRole = styled.div`
   font-size: 0.7rem;
   font-weight: 500;
   color: rgba(158, 240, 200, 0.75);
+`;
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(6, 8, 14, 0.72);
+  backdrop-filter: blur(6px);
+`;
+
+const ConfirmCard = styled.div`
+  width: min(400px, 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 26, 40, 0.98);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  padding: 1.35rem 1.35rem 1.2rem;
+`;
+
+const ConfirmTitle = styled.h2`
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.95);
+`;
+
+const ConfirmBody = styled.p`
+  margin: 0.55rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.62);
+`;
+
+const ConfirmActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+`;
+
+const ConfirmSecondary = styled.button`
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  border-radius: 8px;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+`;
+
+const ConfirmPrimary = styled.button`
+  border: 1px solid rgba(0, 200, 140, 0.45);
+  background: rgba(0, 255, 136, 0.12);
+  color: #9ef0c8;
+  border-radius: 8px;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 255, 136, 0.18);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
 `;

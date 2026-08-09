@@ -8,6 +8,14 @@ import {
   truncateText,
 } from "./aiMatchUtils";
 
+const SignalStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  min-width: 0;
+`;
+
 const ChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -73,9 +81,9 @@ const Chip = styled.span<{ $tone?: "high" | "medium" | "low" | "neutral" | "risk
 `;
 
 const ValueChainNote = styled.p`
-  margin: 0.45rem 0 0;
+  margin: 0;
   font-size: 0.78rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.62);
   word-break: break-word;
 `;
@@ -84,7 +92,8 @@ const EvidenceGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
-  margin: 0;
+  /* Keep clear of the role note / chips above even when the parent has no gap */
+  margin: 0.85rem 0 0;
   width: 100%;
 
   @media (max-width: 720px) {
@@ -155,7 +164,7 @@ export const MatchSignalChips: React.FC<MatchSignalProps> = ({
       : null;
 
   return (
-    <>
+    <SignalStack>
       <ChipRow>
         {decisionTier && <Chip $tone={tone}>{decisionTier}</Chip>}
         {conf && (
@@ -185,12 +194,12 @@ export const MatchSignalChips: React.FC<MatchSignalProps> = ({
           </DemotionList>
         </DemotionBox>
       ) : null}
-    </>
+    </SignalStack>
   );
 };
 
 const DemotionBox = styled.div`
-  margin-top: 0.55rem;
+  margin: 0;
   padding: 0.65rem 0.8rem;
   border-radius: 8px;
   border: 1px solid rgba(230, 190, 80, 0.35);

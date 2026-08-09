@@ -274,7 +274,7 @@ const CaseHeader = styled.div`
   display: grid;
   grid-template-columns: 1.6fr 0.7fr;
   gap: 1.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
   }

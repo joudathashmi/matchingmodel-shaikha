@@ -17,29 +17,7 @@ const BRIEF_ACTIONS: Record<string, { label: string; path: string }> = {
   operating_cadence: { label: "Pursuit", path: "/pursuit" },
 };
 
-const LiveBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #00ff88;
-  border: 1px solid rgba(0, 255, 136, 0.45);
-  background: rgba(0, 255, 136, 0.08);
-  border-radius: 999px;
-  padding: 0.25rem 0.65rem;
-`;
-
-const LiveDot = styled.span`
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #00ff88;
-`;
-
-const AiInsights: React.FC<AiInsightsProps> = ({ insights, engine }) => {
+const AiInsights: React.FC<AiInsightsProps> = ({ insights }) => {
   const navigate = useNavigate();
   const briefs = useMemo(() => (insights || []).slice(0, 5), [insights]);
 
@@ -49,10 +27,7 @@ const AiInsights: React.FC<AiInsightsProps> = ({ insights, engine }) => {
     <Panel>
       <Header>
         <SectionTitle>Insights</SectionTitle>
-        <LiveBadge>
-          <LiveDot />
-          {engine === "live_matching_engine" || !engine ? "Live" : "Live"}
-        </LiveBadge>
+        <HeaderSub>From the live matching book</HeaderSub>
       </Header>
 
       {briefs.length === 0 && (
@@ -124,8 +99,12 @@ const Panel = styled.section`
 `;
 
 const Header = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
   margin-bottom: 0.9rem;
-  padding-bottom: 0.7rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 `;
 
@@ -133,7 +112,15 @@ const SectionTitle = styled.h3`
   margin: 0;
   font-size: 1rem;
   font-weight: 650;
+  line-height: 1.3;
   color: rgba(255, 255, 255, 0.9);
+`;
+
+const HeaderSub = styled.p`
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.45);
 `;
 
 const EmptyState = styled.p`
