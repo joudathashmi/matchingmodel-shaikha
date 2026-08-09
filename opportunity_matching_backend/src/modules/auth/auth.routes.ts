@@ -10,6 +10,11 @@ import {
   changePasswordSchema,
 } from "../../validations/auth.schema";
 import { requireAuth } from "../../middlewares/auth.middleware";
+import {
+  forgotPasswordRateLimiter,
+  loginRateLimiter,
+  resetPasswordRateLimiter,
+} from "../../middlewares/auth-rate-limit.middleware";
 
 const router = Router();
 
@@ -20,14 +25,21 @@ router.post("/nafath/callback", validateApiKey, authControl.nafath_callback);
 // Public self-registration disabled (returns 403)
 router.post("/register", authControl.register);
 
-router.post("/login", validate(loginSchema), authControl.login);
+router.post(
+  "/login",
+  loginRateLimiter,
+  validate(loginSchema),
+  authControl.login
+);
 router.post(
   "/forgot-password",
+  forgotPasswordRateLimiter,
   validate(forgotPasswordSchema),
   authControl.forgotPassword
 );
 router.post(
   "/reset-password",
+  resetPasswordRateLimiter,
   validate(resetPasswordSchema),
   authControl.resetPassword
 );

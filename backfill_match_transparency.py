@@ -33,15 +33,9 @@ from matching_v3 import (
 
 
 def connect():
-    # Prefer explicit MATCHDB_* knobs. Prisma-style DATABASE_URL often includes
-    # ?schema=public which psycopg2 rejects.
-    return psycopg2.connect(
-        host=os.environ.get("MATCHDB_HOST", "localhost"),
-        port=int(os.environ.get("MATCHDB_PORT", "5432")),
-        dbname=os.environ.get("MATCHDB_NAME", "matchmaking F"),
-        user=os.environ.get("MATCHDB_USER", "postgres"),
-        password=os.environ.get("MATCHDB_PASSWORD", "test"),
-    )
+    from db_env import connect_matchdb
+
+    return connect_matchdb()
 
 
 def main():

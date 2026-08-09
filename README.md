@@ -71,7 +71,7 @@ npm install --legacy-peer-deps
 npm start                   # http://localhost:3000  (uses CRACO)
 ```
 
-Default local login (if seeded): `local@rhq.local` / `LocalDev123!`
+Local accounts come from the backend seed (`cd opportunity_matching_backend && npx prisma db seed`). Use only on isolated development machines; never reuse seed passwords in staging or production.
 
 ### 4. Matching engine (optional rematch)
 

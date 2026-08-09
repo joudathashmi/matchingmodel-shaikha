@@ -18,6 +18,14 @@ If a key was ever stored in a local `.env` that may have been shared, **rotate i
 - Production: `REFRESH_COOKIE_SECURE=true`, HTTPS only.
 - Restrict `CORS_ORIGIN` to known frontend hosts.
 - Disable SSO (`ENABLE_SSO=false`) until Nafath integration is fully hardened.
+- Login is rate-limited (20 / 15 min); forgot-password (5 / hour); reset-password (10 / hour).
+- Password-reset tokens are never written to logs. Dev-only link reveal requires `PASSWORD_RESET_DEV_RETURN_LINK=true` and non-production `NODE_ENV`.
+- Do not publish seed or README passwords. Bootstrap local users via Prisma seed only.
+
+## Database scripts
+
+- Python loaders (`load_to_db_v3.py`, audit/backfill) require `MATCHDB_PASSWORD` or `DATABASE_URL` via `db_env.py` — no default password.
+- Prefer least-privilege DB roles (read-only for audit; scoped write for loaders).
 
 ## Matching worker
 

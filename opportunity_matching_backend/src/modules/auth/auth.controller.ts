@@ -60,7 +60,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
 /**
  * Always returns a generic success message (no email enumeration).
- * In development (or PASSWORD_RESET_DEV_RETURN_LINK=true), includes resetUrl.
+ * Dev-only: when NODE_ENV !== production AND PASSWORD_RESET_DEV_RETURN_LINK=true, includes resetUrl.
  */
 export const forgotPassword = async (
   req: Request,
@@ -81,15 +81,14 @@ export const forgotPassword = async (
     }
 
     const resetUrl = `${APP_PUBLIC_URL.replace(/\/$/, "")}/reset-password?token=${issued.rawToken}`;
+    // Never log the raw token or full reset URL (NCA / secrets hygiene).
     logger.info(
       { email: issued.user.email, expiresAt: issued.expiresAt },
       "Password reset token issued"
     );
-    // Ops visibility when SMTP is not wired yet
-    console.log(`[password-reset] ${issued.user.email} → ${resetUrl}`);
 
     const reveal =
-      process.env.NODE_ENV !== "production" ||
+      process.env.NODE_ENV !== "production" &&
       process.env.PASSWORD_RESET_DEV_RETURN_LINK === "true";
 
     if (reveal) {
@@ -282,12 +281,12 @@ export const nafath_callback = async (
       });
     }
 
-    console.log("Received Nafath callback:", req.body);
+    // Do not log or echo identity payload — acknowledge receipt only.
+    logger.info({ provider: "nafath" }, "SSO callback received");
 
     res.json({
       success: true,
       message: "Nafath authentication data received successfully.",
-      data: req.body,
     });
   } catch (err) {
     next(err);

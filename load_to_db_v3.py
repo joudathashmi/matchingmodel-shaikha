@@ -30,14 +30,6 @@ from matching_v2 import (
     preprocess,
 )
 
-DB = dict(
-    dbname=os.environ.get("MATCHDB_NAME", "matchmaking F"),
-    user=os.environ.get("MATCHDB_USER", "postgres"),
-    password=os.environ.get("MATCHDB_PASSWORD", "test"),
-    host=os.environ.get("MATCHDB_HOST", "localhost"),
-    port=int(os.environ.get("MATCHDB_PORT", "5432")),
-)
-
 CSV_PATH = "Output/matching_output_v3.csv"
 COMPANIES_XLSX = "Data/companies.xlsx"
 OPPORTUNITIES_XLSX = "Data/new_opportunities.xlsx"
@@ -47,7 +39,9 @@ YES_TIERS = {"Excellent Match", "Strong Match", "Good Match"}
 
 
 def connect():
-    return psycopg2.connect(**DB)
+    from db_env import connect_matchdb
+
+    return connect_matchdb()
 
 
 def sql_engine():
