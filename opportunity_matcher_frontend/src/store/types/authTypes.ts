@@ -3,17 +3,20 @@ export const LOGIN_SUCCESS = "LOGIN_SUCCESS";
 export const LOGIN_FAILURE = "LOGIN_FAILURE";
 export const LOGOUT = "LOGOUT";
 export const CLEAR_ERROR = "CLEAR_ERROR";
+export const PASSWORD_CHANGED = "PASSWORD_CHANGED";
 
 export interface User {
   id: string;
   email: string;
-  name: string;
-  // Add other user fields as per your API response
+  name?: string | null;
+  mustChangePassword?: boolean;
 }
 
 export interface LoginResponse {
   user: User;
-  token: string;
+  accessToken?: string;
+  token?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthState {
@@ -22,4 +25,5 @@ export interface AuthState {
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
+  mustChangePassword: boolean;
 }

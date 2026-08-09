@@ -9,19 +9,23 @@ datasource db {
 }
 
 model User {
-  id             String           @id @default(cuid())
-  email          String           @unique
-  name           String?
-  passwordHash   String
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  bookmarks      Bookmark[]
-  matchAgreement MatchAgreement[]
-  refreshTokens  RefreshToken[]
-  sessions       Session[]
-  roles          UserRole[]
-  auditLogs      AuditLog[]
-  matchComments  MatchComment[]
+  id                     String           @id @default(cuid())
+  email                  String           @unique
+  name                   String?
+  passwordHash           String
+  /// Admin-created accounts must set a new password on first login
+  mustChangePassword     Boolean          @default(false)
+  passwordResetTokenHash String?
+  passwordResetExpires   DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  bookmarks              Bookmark[]
+  matchAgreement         MatchAgreement[]
+  refreshTokens          RefreshToken[]
+  sessions               Session[]
+  roles                  UserRole[]
+  auditLogs              AuditLog[]
+  matchComments          MatchComment[]
 }
 
 model RefreshToken {

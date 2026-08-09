@@ -11,10 +11,12 @@ function* handleLogin(action: any): Generator<any, void, any> {
     const { email, password } = action.payload;
     const response = yield call(login, email, password);
     
-    // Save token
-    localStorage.setItem("token", response.accessToken || response.token);
-    
-    yield put(loginSuccess(response.user, response.accessToken || response.token));
+    const token = response.accessToken || response.token;
+    const mustChangePassword = Boolean(
+      response.mustChangePassword ?? response.user?.mustChangePassword
+    );
+    localStorage.setItem("token", token);
+    yield put(loginSuccess(response.user, token, mustChangePassword));
   } catch (error: any) {
     // Extract error message from API response
     const errorMessage = error.response?.data?.message || 

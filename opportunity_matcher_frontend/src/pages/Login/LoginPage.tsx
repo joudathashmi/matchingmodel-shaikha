@@ -13,7 +13,12 @@ import AnimatedLoginBackground from './AnimatedLoginBackground';
 // Store
 import { useDispatch, useSelector } from 'react-redux';
 import { loginRequest, clearError } from '../../store/actions/authActions';
-import { selectAuthLoading, selectAuthError, selectIsAuthenticated } from '../../store/selectors/authSelectors';
+import {
+  selectAuthLoading,
+  selectAuthError,
+  selectIsAuthenticated,
+  selectMustChangePassword,
+} from '../../store/selectors/authSelectors';
 import typography from "../../common/typography";
 import { ENABLE_SSO, SSO_PROVIDER_LABEL } from "../../config/features";
 import { markTourPending } from "../../tour/tourStorage";
@@ -51,7 +56,6 @@ const LoginPage: React.FC = () => {
   const [passwordError, setPasswordError] = useState("");
   const [isFormValid, setIsFormValid] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [isLogin, setIsLogin] = useState(true); // Toggle between login and signup
   const [hasApiError, setHasApiError] = useState(false); // Track API errors
   const [sessionNotice, setSessionNotice] = useState("");
 
@@ -59,6 +63,7 @@ const LoginPage: React.FC = () => {
   const loading = useSelector(selectAuthLoading);
   const error = useSelector(selectAuthError);
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const mustChangePassword = useSelector(selectMustChangePassword);
 
   useEffect(() => {
     if (searchParams.get("session") === "expired") {
@@ -77,28 +82,31 @@ const LoginPage: React.FC = () => {
     setIsFormValid(isEmailValid && isPasswordValid);
   }, [email, password, emailError, passwordError]);
 
-  // Redirect if already authenticated and show success toast
+  // Redirect if already authenticated
   useEffect(() => {
-
-
     if (isAuthenticated) {
+      if (mustChangePassword) {
+        toastSuccess("Please set a new password to continue.");
+        navigate("/change-password", { replace: true });
+        return;
+      }
       toastSuccess("Login successful! Redirecting...");
       setShowSuccessToast(true);
       markTourPending();
 
-      // Delay redirect to allow user to see the success message
       const timer = setTimeout(() => {
         navigate("/match-workbench");
       }, 500);
 
       return () => clearTimeout(timer);
-    } else {
-      // If not authenticated and not already on the login page, go to login
-      if (window.location.pathname !== '/') {
-        navigate('/');
-      }
+    } else if (
+      window.location.pathname !== "/" &&
+      !window.location.pathname.startsWith("/forgot-password") &&
+      !window.location.pathname.startsWith("/reset-password")
+    ) {
+      navigate("/");
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, mustChangePassword, navigate]);
 
   // Show error toast when there's an authentication error
   useEffect(() => {
@@ -164,14 +172,7 @@ const LoginPage: React.FC = () => {
     const isPasswordValid = validatePassword();
 
     if (isEmailValid && isPasswordValid) {
-      if (isLogin) {
-        dispatch(loginRequest(email, password));
-
-      } else {
-        // Handle signup logic here
-        toastError("Signup functionality would be implemented here");
-        // You would typically dispatch a signup action here
-      }
+      dispatch(loginRequest(email, password));
     }
   };
 
@@ -275,7 +276,7 @@ const LoginPage: React.FC = () => {
             $isValid={isFormValid}
             $loading={loading}
           >
-            {loading ? (isLogin ? 'Logging in...' : 'Signing up...') : (isLogin ? 'Login' : 'Sign Up')}
+            {loading ? "Signing in…" : "Sign in"}
           </Button>
 
           <SsoDivider>
@@ -301,18 +302,16 @@ const LoginPage: React.FC = () => {
             {!ENABLE_SSO && <SsoBadge>Disabled</SsoBadge>}
           </SsoButton>
 
-          <SecureText>Secure login - your data is protected</SecureText>
+          <SecureText>Secure login - authorised officers only</SecureText>
           <FormOptionsContainer>
-            <ForgotPasswordLink href="#">
-              Forgot Password?
+            <ForgotPasswordLink to="/forgot-password">
+              Forgot password?
             </ForgotPasswordLink>
             <ToggleFormText>
-              {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <Link to="/signup">
-                <ToggleFormButton disabled={loading}>
-                  {isLogin ? "Sign Up" : "Login"}
-                </ToggleFormButton>
-              </Link>
+              Need an account? Contact your administrator or{" "}
+              <DisclaimerLink href="mailto:DBI@misa.gov.sa">
+                DBI@misa.gov.sa
+              </DisclaimerLink>
             </ToggleFormText>
           </FormOptionsContainer>
 
@@ -391,15 +390,15 @@ const FormOptionsContainer = styled.div`
   }
 `;
 
-const ForgotPasswordLink = styled.a`
-  color: #00d084;
+const ForgotPasswordLink = styled(Link)`
+  color: rgba(232, 238, 245, 0.85);
   text-decoration: none;
   font-size: ${typography.button.fontSize};
   font-weight: ${typography.button.fontWeight};
   transition: color 0.2s ease;
-  
+
   &:hover {
-    color: #00b874;
+    color: #fff;
     text-decoration: underline;
   }
 `;

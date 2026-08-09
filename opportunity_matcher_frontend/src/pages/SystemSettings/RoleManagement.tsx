@@ -244,6 +244,10 @@ export default function RoleManagement() {
           <SubmitBtn type="submit" disabled={savingId === "create"}>
             {savingId === "create" ? "Creating…" : "Create user"}
           </SubmitBtn>
+          <Hint>
+            New users must change the temporary password on first sign-in.
+            They can also use Forgot password on the login screen.
+          </Hint>
         </AddForm>
       )}
 
@@ -544,6 +548,14 @@ const AddBtn = styled.button`
   background: linear-gradient(45deg, #00ff88, #00b4d8);
   color: #0a0a0a;
   white-space: nowrap;
+`;
+
+const Hint = styled.p`
+  margin: 0.35rem 0 0;
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.55);
 `;
 
 const SubmitBtn = styled.button`

@@ -14,6 +14,7 @@ const userSelect = {
   id: true,
   email: true,
   name: true,
+  mustChangePassword: true,
   roles: { select: { role: { select: { name: true } } } },
 } as const;
 
@@ -21,12 +22,14 @@ function flattenUser(user: {
   id: string;
   email: string;
   name: string | null;
+  mustChangePassword?: boolean;
   roles: { role: { name: string } }[];
 }) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
+    mustChangePassword: Boolean(user.mustChangePassword),
     roles: user.roles.map((ur) => ur.role.name),
   };
 }
@@ -106,6 +109,7 @@ router.post(
         email: email.trim().toLowerCase(),
         password,
         name: name?.trim() || undefined,
+        mustChangePassword: true,
       });
       await roleService.setUserRole(user.id, assignedRole);
 
@@ -114,7 +118,11 @@ router.post(
         action: "user.create",
         entityType: "user",
         entityId: user.id,
-        metadata: { email: user.email, role: assignedRole },
+        metadata: {
+          email: user.email,
+          role: assignedRole,
+          mustChangePassword: true,
+        },
         ipAddress: req.ip,
       });
 
@@ -217,7 +225,8 @@ router.patch(
             message: "Password must be at least 8 characters",
           });
         }
-        await userService.updateUserPassword(userId, password);
+        // Temporary admin password — force change on next login
+        await userService.adminSetPassword(userId, password);
       }
 
       const updated = await prisma.user.findUnique({

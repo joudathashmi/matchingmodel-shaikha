@@ -3,6 +3,7 @@ import styled from "styled-components";
 import AppShell from "../../components/AppShell";
 import GeneralSettings from "./GeneralSettings";
 import RoleManagement from "./RoleManagement";
+import UserManual from "./UserManual";
 import {
   MatchingSettingsPanel,
   AlertsSettingsPanel,
@@ -49,6 +50,13 @@ type SettingItem = {
 };
 
 const SETTINGS: SettingItem[] = [
+  {
+    id: "user-manual",
+    title: "User guide",
+    description: "Officer manual for matching, pursuit, analytics, and access",
+    icon: generalIcon,
+    ready: true,
+  },
   {
     id: "general",
     title: "Preferences",
@@ -194,7 +202,9 @@ const SystemSettings: React.FC = () => {
                       ? "settings-roles"
                       : setting.id === "general"
                         ? "settings-preferences"
-                        : undefined
+                        : setting.id === "user-manual"
+                          ? "settings-manual"
+                          : undefined
                   }
                 >
                   <CardTop>
@@ -220,6 +230,7 @@ const SystemSettings: React.FC = () => {
               <PageSubtitle>{active.description}</PageSubtitle>
             </PageHeader>
 
+            {active.id === "user-manual" && <UserManual />}
             {active.id === "general" && <GeneralSettings />}
             {active.id === "ai-matching" && <MatchingSettingsPanel />}
             {active.id === "notifications" && <AlertsSettingsPanel />}

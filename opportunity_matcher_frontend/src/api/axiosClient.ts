@@ -45,7 +45,12 @@ const refreshToken = async (): Promise<{ accessToken: string }> => {
     console.error("❌ Token refresh failed:", error);
     // Clear tokens on refresh failure and return to login
     localStorage.removeItem("token");
-    if (typeof window !== "undefined" && !window.location.pathname.match(/^\/($|signup)/)) {
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.match(
+        /^\/($|forgot-password|reset-password)/
+      )
+    ) {
       window.location.href = "/?session=expired";
     }
     throw error;
@@ -55,8 +60,13 @@ const refreshToken = async (): Promise<{ accessToken: string }> => {
 // Request Interceptor
 axiosClient.interceptors.request.use(
   (config) => {
-    // Skip auth for login and refresh endpoints
-    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/refresh')) {
+    // Skip auth header for public auth endpoints
+    if (
+      config.url?.includes("/auth/login") ||
+      config.url?.includes("/auth/refresh") ||
+      config.url?.includes("/auth/forgot-password") ||
+      config.url?.includes("/auth/reset-password")
+    ) {
       return config;
     }
 
@@ -117,7 +127,11 @@ axiosClient.interceptors.response.use(
         // Redirect to login with error message
         if (typeof window !== "undefined") {
           localStorage.removeItem("token");
-          if (!window.location.pathname.match(/^\/($|signup)/)) {
+          if (
+            !window.location.pathname.match(
+              /^\/($|forgot-password|reset-password)/
+            )
+          ) {
             window.location.href = "/?session=expired";
           }
         }
