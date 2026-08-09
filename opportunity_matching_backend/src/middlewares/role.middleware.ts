@@ -1,9 +1,8 @@
 // src/middlewares/role.middleware.ts
 import { AuthRequest } from "../types/auth-request";
 import { Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./../lib/prisma";
 
-const prisma = new PrismaClient();
 
 export function requireRole(roles: string[]) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {

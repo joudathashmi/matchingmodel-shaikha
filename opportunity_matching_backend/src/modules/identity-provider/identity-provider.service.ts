@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./../../lib/prisma";
 import {
   IDENTITY_SETTING_KEY,
   IdentityProviderConfig,
@@ -6,7 +7,6 @@ import {
   defaultIdentityConfig,
 } from "./identity-provider.types";
 
-const prisma = new PrismaClient();
 
 const SECRET_PLACEHOLDER = "••••••••";
 

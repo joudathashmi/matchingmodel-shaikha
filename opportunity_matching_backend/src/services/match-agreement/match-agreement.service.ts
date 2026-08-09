@@ -1,7 +1,6 @@
+import { prisma } from "./../../lib/prisma";
 // src/services/match-agreement/match-agreement.service.ts
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 export class MatchAgreementService {
   async setAgreement(

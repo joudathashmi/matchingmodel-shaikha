@@ -1,8 +1,8 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { parseAiExplanation, parseAiExplanationNew } from "../../utils/stringUtils";
 import { safeParseJsonArray } from "../../utils/jsonUtils";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 function normalizeSector(raw: string | null | undefined): string { 
   if (!raw) return ""; 

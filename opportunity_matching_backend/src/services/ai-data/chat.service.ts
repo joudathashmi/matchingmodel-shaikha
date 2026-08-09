@@ -2,8 +2,8 @@
  * In-app assistant chat - grounded on live companies, opportunities, and matches.
  * Returns structured actions the UI can render as clickable buttons.
  */
-import { PrismaClient } from "@prisma/client";
 import { generatePortfolioAnalyst } from "./portfolio-analyst.service";
+import { prisma } from "./../../lib/prisma";
 import {
   distinctiveTokens,
   intentOf,
@@ -18,7 +18,6 @@ import {
   type OpportunityHit,
 } from "./chat-search";
 
-const prisma = new PrismaClient();
 
 export type ChatMessage = {
   role: "user" | "assistant";

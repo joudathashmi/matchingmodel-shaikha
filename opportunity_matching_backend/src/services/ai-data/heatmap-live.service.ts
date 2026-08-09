@@ -1,10 +1,9 @@
+import { prisma } from "./../../lib/prisma";
 /**
  * Live Investment Opportunity Heat Map
  * Sector × ticket-size matrix from Opportunity + MatchingOutput (pursue coverage).
  */
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 export const INVESTMENT_BUCKETS = [
   "$1-10M",

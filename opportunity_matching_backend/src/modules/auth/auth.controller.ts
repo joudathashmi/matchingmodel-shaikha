@@ -5,11 +5,10 @@ import { verifyRefreshToken, getRefreshCookieOptions } from "../../utils/jwt";
 import * as sessionService from "../users/session.service";
 import * as roleService from "../users/role.service";
 import { AuthRequest } from "../../types/auth-request";
-import { PrismaClient } from "@prisma/client";
 import { getSsoProvider, isSsoEnabled } from "../../config/features";
 import logger from "../../utils/logger";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || "refreshToken";
 

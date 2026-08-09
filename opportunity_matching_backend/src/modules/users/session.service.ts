@@ -1,7 +1,6 @@
+import { prisma } from "./../../lib/prisma";
 // src\modules\users\session.service.ts
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 export async function createSession(userId: string, ipAddress?: string, userAgent?: string) {
   return prisma.session.create({

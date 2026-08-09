@@ -1,9 +1,9 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { ActiveMatchesDTO } from "../../validations/active-matches.schema";
 import { parseAiExplanationNew, parseAiExplanation } from "../../utils/stringUtils";
 import { safeParseJsonArray } from "../../utils/jsonUtils";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function getCompanyList() {
   return prisma.company.findMany({

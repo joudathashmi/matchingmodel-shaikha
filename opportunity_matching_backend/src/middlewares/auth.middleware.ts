@@ -1,9 +1,8 @@
 // src\middlewares\auth.middleware.ts
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "./../lib/prisma";
 
-const prisma = new PrismaClient();
 
 // Extend Express Request type
 export interface AuthRequest extends Request {

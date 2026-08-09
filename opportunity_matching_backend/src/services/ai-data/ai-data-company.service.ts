@@ -1,10 +1,9 @@
+import { prisma } from "./../../lib/prisma";
 /**
  * Live Market Intelligence for the Companies surface.
  * Computed on every request from Company + MatchingOutput (not stale AIInsight rows).
  */
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 type Insight = {
   id: number;

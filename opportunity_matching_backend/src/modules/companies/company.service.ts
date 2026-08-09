@@ -1,9 +1,9 @@
 // src\modules\companies\company.service.ts
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { ListCompaniesDTO } from "../../validations/company.schema";
 import { parseProductServices } from "../../utils/stringUtils";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function getCompanyStats() {
   const totalCompanies = await prisma.company.count();

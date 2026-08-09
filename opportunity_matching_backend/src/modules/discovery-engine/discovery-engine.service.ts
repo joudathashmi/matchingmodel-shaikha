@@ -1,7 +1,7 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { DiscoveryEngineDTO } from "../../validations/discovery-engine.schema";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 function normalizeSector(raw: string | null | undefined): string { 
   if (!raw) return ""; 

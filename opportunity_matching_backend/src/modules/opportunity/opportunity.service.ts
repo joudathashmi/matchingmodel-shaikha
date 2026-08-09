@@ -1,9 +1,9 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { OpportunityDTO } from "../../validations/opportunity.schema";
 import { AuthRequest } from "../../middlewares/auth.middleware";
 import { parseAiExplanationNew, normalizeArrayString } from "../../utils/stringUtils";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 
 function normalizeSector(raw: string | null | undefined): string { 

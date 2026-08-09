@@ -1,7 +1,6 @@
+import { prisma } from "./../../lib/prisma";
 // src/services/bookmark/bookmark.service.ts
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 export class BookmarkService {
   async createBookmark(userId: string, entityId: number, entityType: string) {

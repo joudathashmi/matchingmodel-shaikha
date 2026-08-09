@@ -1,6 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 const MAX_BODY = 2000;
 

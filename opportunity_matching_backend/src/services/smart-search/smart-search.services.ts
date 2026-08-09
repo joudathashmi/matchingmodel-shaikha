@@ -1,7 +1,6 @@
+import { prisma } from "./../../lib/prisma";
 // src/services/smart-search/smart-search.services.ts
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 function compact(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");

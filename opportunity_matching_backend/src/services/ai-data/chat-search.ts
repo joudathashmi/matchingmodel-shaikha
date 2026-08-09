@@ -2,9 +2,9 @@
  * Robust entity search for the AI Matchmaking chat.
  * Handles spaces, punctuation, quotes, multi-word legal names, and sectors.
  */
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 /** Space/punctuation-insensitive id lookup (avoids nested Prisma.sql template issues). */
 async function findIdsByCompact(

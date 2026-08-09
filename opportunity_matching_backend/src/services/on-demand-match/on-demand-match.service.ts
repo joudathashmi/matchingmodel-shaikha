@@ -1,9 +1,8 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import path from "path";
 import { randomUUID } from "crypto";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 const PROJECT_ROOT = path.resolve(__dirname, "../../../../");
 const SCRIPT = path.join(PROJECT_ROOT, "on_demand_match_company.py");

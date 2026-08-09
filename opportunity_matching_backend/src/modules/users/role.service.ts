@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { ALL_ROLES, isAppRole, ROLE_META, type AppRole } from "../../constants/roles";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 export async function ensureRole(roleName: string) {
   const meta = isAppRole(roleName) ? ROLE_META[roleName] : null;

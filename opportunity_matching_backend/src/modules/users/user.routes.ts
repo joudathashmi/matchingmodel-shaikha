@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { requireAuth, AuthRequest } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
-import { PrismaClient } from "@prisma/client";
 import { isAppRole, ROLES, type AppRole } from "../../constants/roles";
 import * as roleService from "./role.service";
 import * as userService from "./user.service";
 import { writeAuditLog } from "../../services/audit/audit.service";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 const router = Router();
 
 const userSelect = {

@@ -1,11 +1,10 @@
+import { prisma } from "./../../lib/prisma";
 /**
  * Live Analytics portal.
  * Every KPI, chart series and insight is computed from Company + Opportunity + MatchingOutput.
  * No DashboardKPI / AIInsight tables. No cosmetic score offsets.
  */
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 const CACHE_MS = 60 * 1000;
 let cache: { at: number; data: any } | null = null;

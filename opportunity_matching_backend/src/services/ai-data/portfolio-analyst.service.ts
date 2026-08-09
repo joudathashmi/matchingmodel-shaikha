@@ -1,11 +1,10 @@
+import { prisma } from "./../../lib/prisma";
 /**
  * Portfolio Analyst Engine
  * Builds leadership briefs from live MatchingOutput evidence.
  * Optionally elevates prose via Azure OpenAI when configured.
  */
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 export type AnalystBrief = {
   insightType: string;

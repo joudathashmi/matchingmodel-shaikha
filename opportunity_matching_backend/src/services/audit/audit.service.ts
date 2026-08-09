@@ -1,6 +1,6 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 export type AuditInput = {
   actorId?: string | null;

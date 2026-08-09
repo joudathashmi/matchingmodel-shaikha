@@ -1,5 +1,4 @@
 // src\modules\users\user.service.ts
-import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import crypto from "crypto";
 import {
@@ -9,8 +8,8 @@ import {
   parseExpiryToMs,
 } from "../../utils/jwt";
 import dayjs from "dayjs";
+import { prisma } from "./../../lib/prisma";
 
-const prisma = new PrismaClient();
 
 const RESET_TTL_MINUTES = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 60);
 

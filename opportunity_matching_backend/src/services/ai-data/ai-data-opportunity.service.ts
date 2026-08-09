@@ -1,10 +1,9 @@
+import { prisma } from "./../../lib/prisma";
 /**
  * Live Market Intelligence for the Opportunities surface.
  * Computed on every request from Opportunity + MatchingOutput.
  */
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 
 type Insight = {
   id: number;
