@@ -85,14 +85,11 @@ export default function MenuBar({ onNavigate }: MenuBarProps) {
   }, [dispatch, user]);
 
   useEffect(() => {
-    if (message) {
-      dispatch(logoutSuccess(""));
-      navigate("/");
-    }
-    if (error) {
-      dispatch(logoutFailure(""));
-      navigate("/");
-    }
+    if (!message && !error) return;
+    // Reset logout banner state, then return to the sign-in screen.
+    if (message) dispatch(logoutSuccess(""));
+    if (error) dispatch(logoutFailure(""));
+    navigate("/");
   }, [message, error, navigate, dispatch]);
 
   const primary: NavEntry[] = [

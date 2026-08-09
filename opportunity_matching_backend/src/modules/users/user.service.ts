@@ -2,7 +2,12 @@
 import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import crypto from "crypto";
-import { signAccessToken, signRefreshToken, parseExpiryToMs } from "../../utils/jwt";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  parseExpiryToMs,
+} from "../../utils/jwt";
 import dayjs from "dayjs";
 
 const prisma = new PrismaClient();
@@ -171,6 +176,8 @@ export const createTokensForUser = async (user: any) => {
     )
     .toDate();
 
+  // Keep one active refresh token per user so logout/refresh stay O(1).
+  await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
   await prisma.refreshToken.create({
     data: {
       tokenHash: refreshTokenHash,
@@ -207,13 +214,15 @@ export const rotateRefreshToken = async (oldToken: string, userId: string) => {
 };
 
 export const revokeRefreshToken = async (token: string) => {
-  const tokens = await prisma.refreshToken.findMany();
-  for (const t of tokens) {
-    const ok = await argon2.verify(t.tokenHash, token).catch(() => false);
-    if (ok) {
-      await prisma.refreshToken.delete({ where: { id: t.id } });
-      return true;
-    }
+  // Never argon2-scan the whole table. Verify the JWT, then delete that user's rows.
+  try {
+    const payload = verifyRefreshToken(token) as { userId?: string };
+    if (!payload?.userId) return false;
+    const result = await prisma.refreshToken.deleteMany({
+      where: { userId: payload.userId },
+    });
+    return result.count > 0;
+  } catch {
+    return false;
   }
-  return false;
 };
