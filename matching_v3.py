@@ -740,74 +740,108 @@ def cap_tier(tier: str, cap: str) -> str:
     return tier if TIER_ORDER.index(tier) >= TIER_ORDER.index(cap) else cap
 
 
-def decide(final: float, gate: str, human: str, gated: bool,
-           light: bool = False) -> str:
-    """Six-tier decision. Analyst verdicts outrank the gate; the gate outranks
-    the score. Depth of vetting bounds the tier: a single-vote (light) positive
-    caps at "Potential Match" - that tier MEANS positively indicated but not
-    fully vetted - and an unexamined pair cannot exceed it either. Only the
-    full multi-vote gate can award Good Match and above."""
+def decide_with_reasons(final: float, gate: str, human: str, gated: bool,
+                        light: bool = False) -> tuple:
+    """Six-tier decision plus machine-readable demotion reasons.
+
+    Analyst verdicts outrank the gate; the gate outranks the score. Depth of
+    vetting bounds the tier: a single-vote (light) positive caps at
+    "Potential Match". Only the full multi-vote gate can award Good+."""
+    reasons: list[str] = []
     if human == "Disagree":
-        return "Poor Match"
+        return "Poor Match", ["human_disagree"]
     tier = tier_for(final)
     if human == "Agree":
         # analyst approval sets a FLOOR of Good Match
-        return tier if TIER_ORDER.index(tier) <= TIER_ORDER.index("Good Match") else "Good Match"
+        if TIER_ORDER.index(tier) <= TIER_ORDER.index("Good Match"):
+            return tier, reasons
+        return "Good Match", ["human_agree_floor"]
     if gate == "No":
-        return "Weak Match" if TIER_ORDER.index(tier) < TIER_ORDER.index("Weak Match") else tier
+        if TIER_ORDER.index(tier) < TIER_ORDER.index("Weak Match"):
+            return "Weak Match", ["gate_rejected"]
+        return tier, reasons
     if gate in ("Partial", "Direct", "Yes") and light:
-        return ("Potential Match"
-                if TIER_ORDER.index(tier) < TIER_ORDER.index("Potential Match") else tier)
+        if TIER_ORDER.index(tier) < TIER_ORDER.index("Potential Match"):
+            return "Potential Match", ["light_gate_cap"]
+        return tier, reasons
     if gate == "Partial":
-        return "Strong Match" if tier == "Excellent Match" else tier
+        if tier == "Excellent Match":
+            return "Strong Match", ["gate_partial_cap"]
+        return tier, reasons
     if gate in ("Direct", "Yes"):
-        return tier
+        return tier, reasons
     # never examined at all
-    return "Potential Match" if TIER_ORDER.index(tier) < TIER_ORDER.index("Potential Match") else tier
+    if TIER_ORDER.index(tier) < TIER_ORDER.index("Potential Match"):
+        return "Potential Match", ["ungated_cap"]
+    return tier, reasons
+
+
+def decide(final: float, gate: str, human: str, gated: bool,
+           light: bool = False) -> str:
+    """Compatibility wrapper — prefer decide_with_reasons for new call sites."""
+    d, _ = decide_with_reasons(final, gate, human, gated, light=light)
+    return d
 
 
 def confidence_score(comp_len, opp_len, class_conf, components, gate_agreement,
                      sector_sim: float = 1.0, penalized: bool = False,
                      evidence_quality: float = 0.5,
                      exact_product: bool = False,
-                     ev_level: int = 0) -> int:
-    """0-100, reflecting EVIDENCE QUALITY first. High (80-100) needs strong
-    public evidence, a direct product match, and multiple agreeing signals;
-    Medium (60-79) is a logical fit with some evidence and some assumptions;
-    below 60 the pairing is mostly inferred.
+                     ev_level: int = 0,
+                     gate: str = "",
+                     light: bool = False) -> int:
+    """0-100, reflecting EVIDENCE QUALITY first.
 
-    Audit D5: without product-family evidence (ev_level ≥ 1) the score is
-    capped below the High band so long profiles cannot wallpaper High."""
+    World-class pass (2026-08): High must be rare and earned. Without product
+    family evidence, rejected gates, thin evidence quality, or light vetting,
+    the score is forced into Medium/Low so officers can triage."""
     completeness = min(1.0, comp_len / 600) * 0.5 + min(1.0, opp_len / 1500) * 0.5
     vals = np.array(components, dtype=float)
     agreement = 1.0 - min(1.0, float(vals.std()) * 2.0)
     if "/" in str(gate_agreement):
         k, n = gate_agreement.split("/")
-        vote = 0.55 if int(n) <= 1 else int(k) / max(1, int(n))
+        vote = 0.45 if int(n) <= 1 else int(k) / max(1, int(n))
     else:
-        vote = 0.5
-    score = (0.20 * completeness + 0.15 * float(class_conf) + 0.15 * agreement
-             + 0.15 * vote + 0.25 * float(evidence_quality)
-             + 0.10 * (1.0 if int(ev_level) >= 1 else 0.0))
+        vote = 0.4
+    score = (0.18 * completeness + 0.12 * float(class_conf) + 0.12 * agreement
+             + 0.18 * vote + 0.28 * float(evidence_quality)
+             + 0.12 * (1.0 if int(ev_level) >= 1 else 0.0))
     if exact_product:
         score += 0.05
     if float(sector_sim) < 0.5:
         score -= 0.15
-    if penalized:
+    if float(sector_sim) < 0.35:
         score -= 0.10
+    if penalized:
+        score -= 0.12
     score = min(1.0, max(0.0, score))
-    # Hard ceiling: High requires at least same-family product evidence.
+
+    # Hard ceilings — High is earned, Low must exist.
+    if str(gate) == "No":
+        score = min(score, 0.54)
+    if light:
+        score = min(score, 0.72)
     if int(ev_level) < 1:
-        score = min(score, 0.79)
+        score = min(score, 0.58)
     if int(ev_level) < 2 and not exact_product:
-        score = min(score, 0.89)
+        score = min(score, 0.78)
+    if float(evidence_quality) < 0.55:
+        score = min(score, 0.70)
+    if float(evidence_quality) < 0.40:
+        score = min(score, 0.52)
+    if completeness < 0.45:
+        score = min(score, 0.62)
+    # High band requires family evidence + solid evidence quality + full gate.
+    if (int(ev_level) < 1 or float(evidence_quality) < 0.60
+            or light or str(gate) not in ("Direct", "Yes", "Partial")):
+        score = min(score, 0.79)
     return int(round(100 * score))
 
 
 def confidence_label(c: int) -> str:
-    """High = strong evidence (80+); Medium = logical fit, some assumptions
-    (60-79); Low = mostly inferred (<60)."""
-    return "High" if c >= 80 else "Medium" if c >= 60 else "Low"
+    """High = strong evidence (82+); Medium = logical fit with gaps (55-81);
+    Low = mostly inferred or gate-rejected (<55)."""
+    return "High" if c >= 82 else "Medium" if c >= 55 else "Low"
 
 
 THIN_PROFILE_CHARS = 400
@@ -1135,16 +1169,19 @@ def enrich_all(client, models, companies, opps, workers=8):
 # ------------------------------- narratives ---------------------------------
 
 NARRATIVE_SYSTEM = (
-    "You are an experienced industrial strategy consultant writing conservative, "
-    "evidence-based assessments for MISA - precision over recall, never an "
-    "optimistic salesperson. Ground every claim in the given texts; name "
-    "products, stages and gaps. A capability the texts do not state DOES NOT "
-    "EXIST for your purposes: never assume certifications, telecom-grade "
-    "qualification, RF or signal-integrity expertise, system-integration "
-    "capability, or export capability. Where a relevant capability is not "
-    "evidenced, write 'No public evidence was identified that demonstrates "
-    "<capability>' instead of assuming it. Formulaic phrasing is a defect: if "
-    "a sentence frame could be reused across many rows unchanged, rewrite it. "
+    "You are a Ministry of Investment (MISA) investment-attraction officer "
+    "writing conservative, evidence-based match assessments for Saudi Arabia "
+    "localization and investor facilitation. Precision over recall; never an "
+    "optimistic salesperson. Every assessment must be usable by a MISA desk "
+    "officer deciding whether to pursue outreach, localize production in KSA, "
+    "or hold. Ground every claim in the given texts; name products, stages "
+    "and gaps. A capability the texts do not state DOES NOT EXIST for your "
+    "purposes: never assume certifications, telecom-grade qualification, RF "
+    "or signal-integrity expertise, system-integration capability, or export "
+    "capability. Where a relevant capability is not evidenced, write "
+    "'No public evidence was identified that demonstrates <capability>' "
+    "instead of assuming it. Formulaic phrasing is a defect: if a sentence "
+    "frame could be reused across many rows unchanged, rewrite it. "
     "BANNED everywhere: 'strong partner', 'reliable supplier', 'aligns well', "
     "'well-positioned', 'leveraging', 'expertise in', 'proven track record', "
     "'facilitate'.")
@@ -1210,6 +1247,33 @@ def normalize_terminology(text: str) -> str:
     return out
 
 
+def _misa_desk_hint(sector: str) -> str:
+    """Map opportunity sector text to a MISA desk hint for officer action."""
+    s = (sector or "").lower()
+    if any(k in s for k in ("health", "pharma", "life science", "biotech", "medical")):
+        return "Healthcare and Life Sciences desk"
+    if any(k in s for k in ("ict", "information", "communication", "software",
+                            "data", "digital", "telecom")):
+        return "ICT desk"
+    if any(k in s for k in ("oil", "gas", "energy", "water", "power", "renewable")):
+        return "Energy and Water desk"
+    if any(k in s for k in ("financ", "bank", "fintech", "insurance")):
+        return "Financial Services desk"
+    if any(k in s for k in ("industri", "manufactur", "mining", "chemical",
+                            "metal", "automotive")):
+        return "Industrial and Manufacturing desk"
+    if any(k in s for k in ("tour", "hospitality", "entertainment", "sport")):
+        return "Tourism and Quality of Life desk"
+    if any(k in s for k in ("logistics", "transport", "aviation", "aerospace",
+                            "defense")):
+        return "Transport and Logistics desk"
+    if any(k in s for k in ("education", "human capital")):
+        return "Human Capital desk"
+    if "rhq" in s or "regional headquarter" in s:
+        return "RHQ program desk"
+    return "sector investment desk"
+
+
 def narrative_prompt(comp, opp, decision, vc_role, required_roles,
                      business_model: str = "", evidenced_products: list = None,
                      end_product: str = "", exact_product: bool = False,
@@ -1217,15 +1281,33 @@ def narrative_prompt(comp, opp, decision, vc_role, required_roles,
                      summary_opener: str = "") -> str:
     opener_line = opener or "vary the opening of every field naturally"
     products_line = "; ".join(evidenced_products or []) or "none extracted from the texts"
-    return f"""Write the investment assessment for this pairing. The decision is
-already made: "{decision}". Company value-chain role: {vc_role or 'unknown'};
-company business model: {business_model or 'not classified'};
+    opp_sector = str(opp.get("Sector", "") if hasattr(opp, "get") else opp["Sector"])
+    desk = _misa_desk_hint(opp_sector)
+    return f"""Write the MISA investment-attraction assessment for this pairing.
+The decision is already made: "{decision}". Company value-chain role:
+{vc_role or 'unknown'}; company business model: {business_model or 'not classified'};
 the opportunity needs: {', '.join(required_roles or ['unknown'])}.
+Suggested MISA desk for this opportunity sector: {desk}.
 
 VERIFIED FACTS (the only established facts beyond the raw texts below):
 - Products/services the company EXPLICITLY evidences: {products_line}
 - The opportunity's required end product: {end_product or 'unspecified'}
 - Evidence that the company makes that exact product: {'YES' if exact_product else 'NO'}
+
+MISA ATTRACTION SCOPE (mandatory for every pursue-grade assessment):
+- Frame the pair as a Saudi investment-attraction case: KSA localization,
+  domestic value-chain build, investor facilitation, or hold.
+- Every pursue assessment (Excellent / Strong / Good / Potential) MUST include:
+  (1) a KSA localization angle (what would be localized, assembled, supplied,
+      or transferred into the Kingdom, or why localization is not yet viable);
+  (2) a concrete MISA officer action (who acts, what mechanism, with whom);
+  (3) program or desk relevance WHEN the texts evidence it (e.g. RHQ, Vision
+      2030 sector theme, named KSA program, SFDA/regulatory pathway). If the
+      texts do NOT evidence a named program, write the sector desk action
+      using "{desk}" and do NOT invent a Vision 2030 or RHQ claim.
+- Do not write generic global "partnership" advice that could apply outside
+  Saudi investment attraction. Geography, localization model, and officer
+  next step must be explicit.
 
 EVIDENCE RULES (violating any is a defect):
 - Claim ONLY capabilities the company texts state. Certifications,
@@ -1252,17 +1334,19 @@ STYLE RULES (violating any is a defect):
   company's assessment unchanged must be rewritten.
 - Structure: {opener_line}. Do NOT open every field with the company name,
   and do not reuse one sentence skeleton across the fields.
+- NEVER begin recommended_engagement with "Invest Saudi". Prefer imperative
+  officer verbs assigned below.
 
 Return STRICT JSON only:
-{{"strengths": "2-3 sentences: ONLY demonstrated capabilities that genuinely match, citing named products and value-chain stages from the evidence. No assumed capabilities. Do NOT open with the company name - open with the capability or the requirement it meets",
-  "risks": "2-3 sentences naming the decisive CAPABILITY GAPS relative to this opportunity (e.g. no evidence of required certifications, no OEM qualification, no subsystem integration capability, no export experience, commodity supplier rather than strategic technology partner, would require qualification before deployment) through DIFFERENT lenses. The FIRST sentence must state {{RISK_LENS}} as a concrete fact about this company (what it IS or MAKES and why that falls short). Any 'No public evidence was identified...' sentence belongs AFTER that opening sentence, never first. Do NOT open with 'The opportunity requires', 'The company', or ANY phrasing that starts with 'No' ('No evidence', 'No public evidence', 'No direct evidence')",
-  "value_chain_position": "1-2 sentences: place the company at its exact stage of the chain (Raw Material -> Component Supplier -> Subsystem Supplier -> OEM -> System Integrator -> Operator/End Customer) and state the evidence for why it sits there; note where an upstream supplier still strengthens localization of this opportunity's chain",
-  "recommended_engagement": "1-2 sentences in IMPERATIVE voice. The FIRST WORD must be '{{VERB}}'. The mechanism MUST match the company's demonstrated maturity: component/material suppliers and distributors get pilot supply agreements, technical validation or vendor qualification; OEMs/contract manufacturers get strategic partnership or joint manufacturing; technology companies get joint development, licensing or co-investment. Never recommend a partnership that exceeds demonstrated capability. Name the counterpart entities and the mechanism. NEVER begin with 'Invest Saudi'",
+{{"strengths": "2-3 sentences: ONLY demonstrated capabilities that genuinely match Saudi localization of this opportunity, citing named products and value-chain stages. State how those capabilities support KSA domestic production, assembly, supply, or technology transfer. No assumed capabilities. Do NOT open with the company name",
+  "risks": "2-3 sentences naming decisive CAPABILITY or LOCALIZATION GAPS for KSA attraction (certification/SFDA pathway, OEM qualification, missing product line, no KSA/MENA footprint, business-model mismatch). The FIRST sentence must state {{RISK_LENS}} as a concrete fact about this company. Any 'No public evidence was identified...' sentence belongs AFTER that opening sentence, never first. Do NOT open with 'The opportunity requires', 'The company', or ANY phrasing that starts with 'No'",
+  "value_chain_position": "1-2 sentences: place the company at its exact stage of the chain (Raw Material -> Component Supplier -> Subsystem Supplier -> OEM -> System Integrator -> Operator/End Customer) and state the evidence; note how that stage strengthens or fails KSA localization of this opportunity",
+  "recommended_engagement": "2 sentences in IMPERATIVE voice for a MISA officer. The FIRST WORD must be '{{VERB}}'. Sentence 1: mechanism matched to maturity (pilot supply / vendor qualification / joint manufacturing / licensing / co-development) naming counterpart entities. Sentence 2: assign the action to the {desk} (or a program desk only if evidenced) and state the KSA localization outcome sought. Never recommend a partnership that exceeds demonstrated capability. NEVER begin with 'Invest Saudi'",
   "suggested_localization_model": "one of: Greenfield manufacturing | Regional assembly | Joint venture | Licensing and technology transfer | Supplier localization | Distribution partnership | Not recommended",
-  "match_reason": ["3 factual reasons, each citing a DIFFERENT kind of evidence (product fit, value-chain position, market/footprint), each labelled as a direct match, supporting capability, or ecosystem contribution. Each reason MUST name at least one specific product, material, stage, facility or figure from the texts AND tie it to a named requirement of the opportunity. Abstract connectors ('complements the needs', 'supports objectives', 'provides a foundation', 'demonstrates readiness') are defects; none may start with 'The company'", "...", "..."],
-  "profile_match_reason": "1-2 sentences justifying the profile_similarity value: how the company's BUSINESS MODEL ({business_model or 'unclassified'}) compares to what the opportunity seeks, plus what in its profile (identity, scale, sectors served, footprint) matches or fails to match, citing profile facts. Populated for every row",
-  "product_match_reason": "1-2 sentences justifying the product_similarity value: name the specific EVIDENCED products/services that map to named opportunity requirements and state whether they constitute the exact end product, a subsystem, an enabling component, or an indirect input - or exactly which required products are missing. Populated for every row",
-  "executive_summary": "2-3 sentences an investment manager reads first; conservative, specific, decisive; distinguish direct capability from supporting or assumed capability. Do NOT open with the company name and do NOT open with 'No evidence', 'No public evidence' or 'No direct' - {{SUMMARY_OPENER}}"}}
+  "match_reason": ["3 factual reasons for MISA pursuit priority. Cover DIFFERENT evidence kinds: (a) product fit for the KSA opportunity end product, (b) value-chain role useful for localization, (c) market/footprint or program relevance. Each reason MUST name a specific product/material/stage/figure from the texts AND tie it to a named opportunity requirement or KSA localization need. Label each as direct match, supporting capability, or ecosystem contribution. Abstract connectors are defects; none may start with 'The company'", "...", "..."],
+  "profile_match_reason": "1-2 sentences justifying profile_similarity for attraction: business model ({business_model or 'unclassified'}) vs what KSA localization needs, plus footprint/scale facts that help or hinder Kingdom entry",
+  "product_match_reason": "1-2 sentences justifying product_similarity: name evidenced products mapping to named opportunity requirements and whether they are the exact end product, subsystem, enabling component, or missing for KSA localization",
+  "executive_summary": "2-3 sentences a MISA investment manager reads first. Must state the pursuit verdict, the KSA localization angle, and the officer next step. Conservative, specific, decisive; distinguish direct vs supporting capability. Do NOT open with the company name and do NOT open with 'No evidence' - {{SUMMARY_OPENER}}"}}
 
 COMPANY
   Name: {comp['company_name']}
@@ -1301,6 +1385,165 @@ def normalize_localization(value: str, decision: str) -> str:
     return "Supplier localization" if positive else "Not recommended"
 
 
+_BANNED_HYPE = (
+    (re.compile(r"\bleveraging\b", re.I), "using"),
+    (re.compile(r"\bleverage\b", re.I), "use"),
+    (re.compile(r"\baligns well\b", re.I), "matches"),
+    (re.compile(r"\bwell-positioned\b", re.I), "relevant"),
+    (re.compile(r"\bproven track record\b", re.I), "documented delivery history"),
+    (re.compile(r"\bextensive experience\b", re.I), "stated operating history"),
+    (re.compile(r"\bstrong partner\b", re.I), "candidate counterpart"),
+    (re.compile(r"\breliable supplier\b", re.I), "supplier"),
+    (re.compile(r"\bexpertise in\b", re.I), "stated capability in"),
+    (re.compile(r"\bfacilitate\b", re.I), "enable"),
+)
+
+
+def _scrub_hype(text: str) -> str:
+    out = str(text or "")
+    for pat, repl in _BANNED_HYPE:
+        out = pat.sub(repl, out)
+    return out
+
+
+def _rewrite_opening(text: str, company_name: str) -> str:
+    """Stop strengths/summaries opening with the company name or 'No evidence'."""
+    t = str(text or "").strip()
+    if not t:
+        return t
+    name = str(company_name or "").strip()
+    low = t.lower()
+    if name and low.startswith(name.lower()):
+        rest = t[len(name):].lstrip(" ,'\"-–—:")
+        if rest:
+            t = rest[0].upper() + rest[1:] if len(rest) > 1 else rest.upper()
+    elif low.startswith("the company"):
+        rest = t[11:].lstrip(" ,'\"-–—:")
+        if rest:
+            t = rest[0].upper() + rest[1:] if len(rest) > 1 else rest.upper()
+    # Risks must not open with the no-evidence sentence.
+    if re.match(r"^no (public |direct )?evidence", t, flags=re.I):
+        t = "Capability gap remains open: " + t[0].lower() + t[1:]
+    return t
+
+
+def fallback_engagement(decision: str, company_name: str, end_product: str,
+                        role: str = "", sector: str = "") -> str:
+    """Always give a MISA officer a next action: pursue localization or hold."""
+    company = company_name or "the company"
+    product = end_product or "the required end product"
+    desk = _misa_desk_hint(sector)
+    role_l = (role or "").lower()
+    if decision in ("Weak Match", "Poor Match"):
+        return (
+            f"Hold MISA outreach on {company} until product-family evidence for "
+            f"{product} is confirmed for KSA localization. Route any reopen "
+            f"request through the {desk}."
+        )
+    if decision == "Potential Match":
+        return (
+            f"Commission a {desk} review of {company}'s evidenced products against "
+            f"{product} before KSA investor outreach. Confirm whether supplier "
+            f"localization or a joint venture path is viable."
+        )
+    if "supplier" in role_l or "distributor" in role_l or "raw material" in role_l:
+        return (
+            f"Commission a pilot supply and vendor-qualification track with "
+            f"{company} for {product}. Assign the {desk} to test KSA supplier "
+            f"localization before Pursuit Engage."
+        )
+    if decision == "Excellent Match":
+        return (
+            f"Convene a {desk} facilitation session with {company} on joint "
+            f"manufacturing or KSA localization of {product}. Prepare a Pursuit "
+            f"Engage brief with the proposed localization model."
+        )
+    return (
+        f"Structure a technical validation workshop with {company} against "
+        f"{product} requirements for KSA localization. Assign the {desk} to "
+        f"decide joint venture versus licensing before Pursuit Engage."
+    )
+
+
+_KSA_SCOPE_RE = re.compile(
+    r"\b(KSA|Saudi|Kingdom|MENA|GCC|localization|localis|RHQ|Vision 2030|"
+    r"joint venture|greenfield|SFDA|MISA)\b",
+    re.I,
+)
+_MISA_DESK_RE = re.compile(
+    r"\b(MISA|desk|officer|Pursuit Engage|RHQ program)\b",
+    re.I,
+)
+
+
+def _ensure_misa_scope(text: str, decision: str, company_name: str,
+                       end_product: str, role: str = "",
+                       sector: str = "") -> str:
+    """Append KSA localization + MISA desk action if the model omitted them."""
+    t = str(text or "").strip()
+    desk = _misa_desk_hint(sector)
+    if decision in ("Weak Match", "Poor Match"):
+        if not t:
+            return fallback_engagement(decision, company_name, end_product,
+                                       role=role, sector=sector)
+        if not _KSA_SCOPE_RE.search(t) or not _MISA_DESK_RE.search(t):
+            t = (t.rstrip(".") + f". Keep on hold for KSA localization until "
+                 f"the {desk} reopens the file.")
+        return t
+    if not t:
+        return fallback_engagement(decision, company_name, end_product,
+                                   role=role, sector=sector)
+    extras = []
+    if not _KSA_SCOPE_RE.search(t):
+        extras.append(
+            f"Target KSA localization of {end_product or 'the opportunity end product'}"
+        )
+    if not _MISA_DESK_RE.search(t):
+        extras.append(f"assign the {desk} to own next contact")
+    if extras:
+        t = t.rstrip(".") + ". " + "; ".join(extras) + "."
+    return t
+
+
+def polish_narrative(out: dict, company_name: str, decision: str,
+                     role: str = "", end_product: str = "",
+                     sector: str = "") -> dict:
+    """Runtime enforcement of narrative evidence/style and MISA scope rules."""
+    polished = dict(out or {})
+    for key in ("strengths", "risks", "value_chain_position",
+                "recommended_engagement", "profile_match_reason",
+                "product_match_reason", "executive_summary"):
+        polished[key] = _scrub_hype(str(polished.get(key, "")).strip())
+    polished["strengths"] = _rewrite_opening(polished.get("strengths", ""), company_name)
+    polished["executive_summary"] = _rewrite_opening(
+        polished.get("executive_summary", ""), company_name)
+    polished["risks"] = _rewrite_opening(polished.get("risks", ""), company_name)
+    if not polished.get("recommended_engagement"):
+        polished["recommended_engagement"] = fallback_engagement(
+            decision, company_name, end_product, role=role, sector=sector)
+    else:
+        polished["recommended_engagement"] = _scrub_hype(
+            polished["recommended_engagement"])
+    polished["recommended_engagement"] = _ensure_misa_scope(
+        polished["recommended_engagement"], decision, company_name, end_product,
+        role=role, sector=sector)
+    # Executive summary should also carry KSA angle for pursue rows.
+    summary = polished.get("executive_summary") or ""
+    if decision in VETTED_TIERS or decision == "Potential Match":
+        if summary and not _KSA_SCOPE_RE.search(summary):
+            polished["executive_summary"] = (
+                summary.rstrip(".")
+                + f". KSA localization case for {end_product or 'this opportunity'}."
+            )
+        risks = polished.get("risks") or ""
+        if risks and not _KSA_SCOPE_RE.search(risks):
+            polished["risks"] = (
+                risks.rstrip(".")
+                + ". Confirm KSA footprint, regulatory pathway, and localization readiness before outreach."
+            )
+    return polished
+
+
 def generate_narrative(client, models, comp, opp, decision, vc_role,
                        required_roles, business_model: str = "",
                        evidenced_products: list = None, end_product: str = "",
@@ -1321,8 +1564,10 @@ def generate_narrative(client, models, comp, opp, decision, vc_role,
     if not isinstance(reasons, list):
         reasons = [str(reasons)]
     reasons = [str(r).strip() for r in reasons if str(r).strip()][:3]
-    reasons = [normalize_terminology(r) for r in reasons]
-    return {
+    reasons = [_scrub_hype(normalize_terminology(r)) for r in reasons]
+    company_name = str(comp.get("company_name", "") if hasattr(comp, "get")
+                       else comp["company_name"])
+    result = {
         "strengths": normalize_terminology(str(out.get("strengths", "")).strip()),
         "risks": normalize_terminology(str(out.get("risks", "")).strip()),
         "value_chain_position": normalize_terminology(
@@ -1339,6 +1584,19 @@ def generate_narrative(client, models, comp, opp, decision, vc_role,
         "executive_summary": normalize_terminology(
             str(out.get("executive_summary", "")).strip()),
     }
+    opp_sector = ""
+    try:
+        opp_sector = str(opp["Sector"] if "Sector" in opp else opp.get("Sector", ""))
+    except Exception:
+        opp_sector = ""
+    return polish_narrative(
+        result,
+        company_name=company_name,
+        decision=decision,
+        role=str(vc_role or ""),
+        end_product=str(end_product or ""),
+        sector=opp_sector,
+    )
 
 # ----------------------------------- main -----------------------------------
 
@@ -1752,8 +2010,9 @@ def main():
             light = int(agree.split("/")[1]) < args.gpt_votes
         else:
             light = (r["gate_depth"] == "light")
-        d = decide(r["final_score"], r["gate"], r["human_verdict"], bool(r["gate"]),
-                   light=light)
+        d, gate_reasons = decide_with_reasons(
+            r["final_score"], r["gate"], r["human_verdict"], bool(r["gate"]),
+            light=light)
         comps = [r["sector_similarity"], r["profile_similarity"], r["product_similarity"],
                  r["value_chain_score"], r["investment_readiness_score"]]
         c = confidence_score(r["_comp_len"], 1500, r["_class_conf"], comps,
@@ -1762,14 +2021,17 @@ def main():
                              penalized=bool(r["_penalties"]),
                              evidence_quality=float(r["_evq"]),
                              exact_product=bool(r["_exact"]),
-                             ev_level=int(r["_ev_level"]))
+                             ev_level=int(r["_ev_level"]),
+                             gate=str(r["gate"] or ""),
+                             light=light)
         d, guards = apply_evidence_guards(d, c, float(r["sector_similarity"]),
                                           int(r["_ev_level"]), int(r["_comp_len"]),
                                           r["human_verdict"])
+        flags = list(gate_reasons) + list(guards)
         decisions.append(d)
         confidences.append(f"{c} ({confidence_label(c)})")
         ai_scores.append(1 if TIER_ORDER.index(d) <= TIER_ORDER.index("Good Match") else 0)
-        evidence_flags.append(";".join(guards))
+        evidence_flags.append(";".join(flags))
     df["decision"] = decisions
     df["confidence_score"] = confidences
     df["ai_score"] = ai_scores
@@ -1822,12 +2084,28 @@ def main():
                 for k, v in g.items():
                     out_rows.at[idx, k] = v
 
-    # Engagement guidance only where engagement makes sense (analyst decision
-    # 2026-07-21): rejected rows keep their risks and summary (the why-not) but
-    # carry no engagement plan.
+    # Rejected rows keep a HOLD engagement (why-not + unlock condition) instead
+    # of a blank action field — officers still need a next step.
     rejected = out_rows["decision"].isin(["Weak Match", "Poor Match"])
-    out_rows.loc[rejected, "recommended_engagement"] = ""
     out_rows.loc[rejected, "suggested_localization_model"] = "Not recommended"
+    for idx, row in out_rows[rejected].iterrows():
+        out_rows.at[idx, "recommended_engagement"] = fallback_engagement(
+            row["decision"],
+            str(row.get("company_name") or ""),
+            str(row.get("_end_product") or ""),
+            role=str(row.get("_role") or ""),
+            sector=str(row.get("opportunity_sector") or ""),
+        )
+    # Pursue / explore rows must never ship without an engagement action.
+    for idx, row in out_rows[~rejected].iterrows():
+        if not str(row.get("recommended_engagement") or "").strip():
+            out_rows.at[idx, "recommended_engagement"] = fallback_engagement(
+                row["decision"],
+                str(row.get("company_name") or ""),
+                str(row.get("_end_product") or ""),
+                role=str(row.get("_role") or ""),
+                sector=str(row.get("opportunity_sector") or ""),
+            )
 
     # Match type + honest per-opportunity status (independent-review fixes):
     # the tier says how good the fit is, match_type says what the fit IS, and

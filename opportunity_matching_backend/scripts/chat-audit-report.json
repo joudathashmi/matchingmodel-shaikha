@@ -1,0 +1,462 @@
+{
+  "started": "2026-08-05T16:48:34.356Z",
+  "ended": "2026-08-05T16:49:13.385Z",
+  "api": "http://localhost:4000/api",
+  "summary": {
+    "total": 58,
+    "passed": 58,
+    "failed": 0,
+    "passRate": 100
+  },
+  "byCategory": {
+    "Fixtures": {
+      "pass": 5,
+      "fail": 0
+    },
+    "API contract": {
+      "pass": 6,
+      "fail": 0
+    },
+    "Company lookups": {
+      "pass": 16,
+      "fail": 0
+    },
+    "Opportunities": {
+      "pass": 8,
+      "fail": 0
+    },
+    "Sectors": {
+      "pass": 3,
+      "fail": 0
+    },
+    "Matches & tiers": {
+      "pass": 6,
+      "fail": 0
+    },
+    "Match-case context": {
+      "pass": 3,
+      "fail": 0
+    },
+    "Action integrity": {
+      "pass": 4,
+      "fail": 0
+    },
+    "Conversation history": {
+      "pass": 2,
+      "fail": 0
+    },
+    "Resilience": {
+      "pass": 3,
+      "fail": 0
+    },
+    "Latency": {
+      "pass": 2,
+      "fail": 0
+    }
+  },
+  "latencies": {
+    "samples": 23,
+    "avgMs": 1518,
+    "maxMs": 17824
+  },
+  "results": [
+    {
+      "category": "Fixtures",
+      "name": "Hayat company in DB",
+      "status": "pass",
+      "detail": "Hayat Pharmaceutical Industries Co. Ltd."
+    },
+    {
+      "category": "Fixtures",
+      "name": "EastPharma company in DB",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Fixtures",
+      "name": "Generic Drugs opportunity in DB",
+      "status": "pass",
+      "detail": "Generic Drugs Manufacturing"
+    },
+    {
+      "category": "Fixtures",
+      "name": "Hayat has at least one match",
+      "status": "pass",
+      "detail": "4"
+    },
+    {
+      "category": "Fixtures",
+      "name": "Excellent-tier match exists",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "API contract",
+      "name": "Empty message rejected or handled",
+      "status": "pass",
+      "detail": "status=400"
+    },
+    {
+      "category": "API contract",
+      "name": "Happy path HTTP 200",
+      "status": "pass",
+      "detail": "status=200",
+      "latencyMs": 57
+    },
+    {
+      "category": "API contract",
+      "name": "Response has reply string",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "API contract",
+      "name": "Response has actions array",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "API contract",
+      "name": "Response has engine label",
+      "status": "pass",
+      "detail": "live_matching_engine"
+    },
+    {
+      "category": "API contract",
+      "name": "Response has context counts",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Company lookups",
+      "name": "Quoted full legal name: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=27",
+      "latencyMs": 27,
+      "query": "what is this company 'Hayat Pharmaceutical Industries Co. Ltd.'"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Quoted full legal name: actionable Open button",
+      "status": "pass",
+      "detail": "Open · Hayat Pharmaceutical Industries Co. Ltd.",
+      "query": "what is this company 'Hayat Pharmaceutical Industries Co. Ltd.'"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Unquoted full legal name: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=16",
+      "latencyMs": 16,
+      "query": "what is this company Hayat Pharmaceutical Industries Co. Ltd."
+    },
+    {
+      "category": "Company lookups",
+      "name": "Unquoted full legal name: actionable Open button",
+      "status": "pass",
+      "detail": "Open · Hayat Pharmaceutical Industries Co. Ltd.",
+      "query": "what is this company Hayat Pharmaceutical Industries Co. Ltd."
+    },
+    {
+      "category": "Company lookups",
+      "name": "Short distinctive name: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=15",
+      "latencyMs": 15,
+      "query": "Tell me about Hayat"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Short distinctive name: actionable Open button",
+      "status": "pass",
+      "detail": "Open · Hayat Pharmaceutical Industries Co. Ltd.",
+      "query": "Tell me about Hayat"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Bare EastPharma: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=15",
+      "latencyMs": 15,
+      "query": "EastPharma Ltd"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Bare EastPharma: actionable Open button",
+      "status": "pass",
+      "detail": "Open · EastPharma Ltd",
+      "query": "EastPharma Ltd"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Lowercase multi-word: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=15",
+      "latencyMs": 15,
+      "query": "hameln pharma"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Lowercase multi-word: actionable Open button",
+      "status": "pass",
+      "detail": "Open · hameln pharma gmbh",
+      "query": "hameln pharma"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Find X company phrasing: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=15",
+      "latencyMs": 15,
+      "query": "find Hayat company"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Find X company phrasing: actionable Open button",
+      "status": "pass",
+      "detail": "Open · Hayat Pharmaceutical Industries Co. Ltd.",
+      "query": "find Hayat company"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Ampersand + punctuation: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=30",
+      "latencyMs": 30,
+      "query": "Arthur J. Gallagher & Co."
+    },
+    {
+      "category": "Company lookups",
+      "name": "Ampersand + punctuation: actionable Open button",
+      "status": "pass",
+      "detail": "View · Arthur J. Gallagher & Co.",
+      "query": "Arthur J. Gallagher & Co."
+    },
+    {
+      "category": "Company lookups",
+      "name": "Multi-word European name: reply mentions entity",
+      "status": "pass",
+      "detail": "companies=1 ms=30",
+      "latencyMs": 30,
+      "query": "Veolia Environnement"
+    },
+    {
+      "category": "Company lookups",
+      "name": "Multi-word European name: actionable Open button",
+      "status": "pass",
+      "detail": "Open · Veolia Environnement SA",
+      "query": "Veolia Environnement"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Exact opportunity name: relevant hit",
+      "status": "pass",
+      "detail": "opps=8 matches=8 ms=189",
+      "latencyMs": 189,
+      "query": "Generic Drugs Manufacturing"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Exact opportunity name: has actions",
+      "status": "pass",
+      "detail": "",
+      "query": "Generic Drugs Manufacturing"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Partial opportunity name: relevant hit",
+      "status": "pass",
+      "detail": "opps=2 matches=8 ms=44",
+      "latencyMs": 44,
+      "query": "Generic Drugs"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Partial opportunity name: has actions",
+      "status": "pass",
+      "detail": "",
+      "query": "Generic Drugs"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Sector opportunity ask: relevant hit",
+      "status": "pass",
+      "detail": "opps=8 matches=8 ms=4995",
+      "latencyMs": 4995,
+      "query": "Investment opportunities in Pharma"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Sector opportunity ask: has actions",
+      "status": "pass",
+      "detail": "",
+      "query": "Investment opportunities in Pharma"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Vaccine opportunity: relevant hit",
+      "status": "pass",
+      "detail": "opps=1 matches=5 ms=34",
+      "latencyMs": 34,
+      "query": "Vaccine Manufacturing opportunity"
+    },
+    {
+      "category": "Opportunities",
+      "name": "Vaccine opportunity: has actions",
+      "status": "pass",
+      "detail": "",
+      "query": "Vaccine Manufacturing opportunity"
+    },
+    {
+      "category": "Sectors",
+      "name": "\"Companies in Healthcare and Life Sciences\": returns companies or sector reply",
+      "status": "pass",
+      "detail": "companies=8",
+      "latencyMs": 186,
+      "query": "Companies in Healthcare and Life Sciences"
+    },
+    {
+      "category": "Sectors",
+      "name": "\"Healthcare & Life Sciences companies\": returns companies or sector reply",
+      "status": "pass",
+      "detail": "companies=8",
+      "latencyMs": 155,
+      "query": "Healthcare & Life Sciences companies"
+    },
+    {
+      "category": "Sectors",
+      "name": "\"companies in Healthcare\": returns companies or sector reply",
+      "status": "pass",
+      "detail": "companies=8",
+      "latencyMs": 3497,
+      "query": "companies in Healthcare"
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Excellent matches: matchCount > 0",
+      "status": "pass",
+      "detail": "matchCount=8",
+      "latencyMs": 17824
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Excellent matches: Open actions",
+      "status": "pass",
+      "detail": "/matches/2, /matches/3"
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Excellent matches: substantial reply",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Matches for EastPharma",
+      "status": "pass",
+      "detail": "matches=3",
+      "latencyMs": 39
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Matches for Hayat",
+      "status": "pass",
+      "detail": "matches=1",
+      "latencyMs": 36
+    },
+    {
+      "category": "Matches & tiers",
+      "name": "Strong tier query doesn't crash",
+      "status": "pass",
+      "detail": "matches=8",
+      "latencyMs": 6874
+    },
+    {
+      "category": "Match-case context",
+      "name": "Risk question with matchId returns reply",
+      "status": "pass",
+      "detail": "ms=43",
+      "latencyMs": 43
+    },
+    {
+      "category": "Match-case context",
+      "name": "Focused match surfaces in context or reply",
+      "status": "pass",
+      "detail": "hasMatch=true"
+    },
+    {
+      "category": "Match-case context",
+      "name": "Focused match Open action present",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Action integrity",
+      "name": "Has /matches/:id actions",
+      "status": "pass",
+      "detail": "[\"/matches/4\"]"
+    },
+    {
+      "category": "Action integrity",
+      "name": "First action match exists in DB",
+      "status": "pass",
+      "detail": "4"
+    },
+    {
+      "category": "Action integrity",
+      "name": "Action labels non-empty",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Action integrity",
+      "name": "Action types recognized",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Conversation history",
+      "name": "Follow-up with history doesn't crash",
+      "status": "pass",
+      "detail": "ms=34",
+      "latencyMs": 34
+    },
+    {
+      "category": "Conversation history",
+      "name": "Follow-up stays grounded (EastPharma or matches)",
+      "status": "pass",
+      "detail": "companies=1 matches=3"
+    },
+    {
+      "category": "Resilience",
+      "name": "Nonsense query graceful reply",
+      "status": "pass",
+      "detail": "ms=755",
+      "latencyMs": 755
+    },
+    {
+      "category": "Resilience",
+      "name": "Overlong message handled (reject or trim)",
+      "status": "pass",
+      "detail": "status=400"
+    },
+    {
+      "category": "Resilience",
+      "name": "Punctuation-only query graceful",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Latency",
+      "name": "Average latency under 25s (Azure path)",
+      "status": "pass",
+      "detail": "avg=1518ms p95=6874ms max=17824ms n=23"
+    },
+    {
+      "category": "Latency",
+      "name": "No single call over 60s",
+      "status": "pass",
+      "detail": "max=17824ms"
+    }
+  ]
+}

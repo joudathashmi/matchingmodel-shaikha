@@ -1,0 +1,14 @@
+export const GET_COMPANIES = "GET_COMPANIES";
+export const GET_COMPANIES_SUCCESS = "GET_COMPANIES_SUCCESS";
+export const GET_COMPANIES_FAILURE = "GET_COMPANIES_FAILURE";
+
+export interface Company {
+  id: number;
+  company_name: string;
+}
+
+export interface CompaniesState {
+  companies: Company[];
+  loading: boolean;
+  error: string | null;
+}

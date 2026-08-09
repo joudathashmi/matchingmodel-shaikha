@@ -1,0 +1,56 @@
+image: atlassian/default-image:3
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Deploy Backend (develop)
+          deployment: Development
+          caches:
+            - node
+          script:
+            # Sync code (uses repository SSH key; no SSH_KEY var needed)
+            - pipe: atlassian/rsync-deploy:0.8.0
+              variables:
+                USER: $VM_USER
+                SERVER: $VM_HOST
+                REMOTE_PATH: /var/www/OpportunityMatcher/backend
+                LOCAL_PATH: .
+                PORT: $VM_PORT
+                DELETE_FLAG: "true"
+                OPTIONS: "-az --omit-dir-times --exclude='.git/' --exclude='.bitbucket/' --exclude='node_modules/' --exclude='.env'"
+
+            # Remote commands
+            - pipe: atlassian/ssh-run:0.8.0
+              variables:
+                SSH_USER: $VM_USER
+                SERVER: $VM_HOST
+                PORT: $VM_PORT
+                COMMAND: |
+                  set -e
+                  cd /var/www/OpportunityMatcher/backend
+                  if [ "${WRITE_ENV:-false}" = "true" ]; then
+                    printf '%s\n' \
+                      "DATABASE_URL=${DATABASE_URL}" \
+                      "NAFATH_CALLBACK_API_KEY=${NAFATH_CALLBACK_API_KEY}" \
+                      "JWT_ACCESS_TOKEN_SECRET=${JWT_ACCESS_TOKEN_SECRET}" \
+                      "JWT_REFRESH_TOKEN_SECRET=${JWT_REFRESH_TOKEN_SECRET}" \
+                      "ACCESS_TOKEN_EXPIRES_IN=${ACCESS_TOKEN_EXPIRES_IN:-30d}" \
+                      "REFRESH_TOKEN_EXPIRES_IN=${REFRESH_TOKEN_EXPIRES_IN:-30d}" \
+                      "REFRESH_COOKIE_NAME=${REFRESH_COOKIE_NAME:-refreshToken}" \
+                      "REFRESH_COOKIE_PATH=${REFRESH_COOKIE_PATH:-/api/auth}" \
+                      "REFRESH_COOKIE_HTTP_ONLY=${REFRESH_COOKIE_HTTP_ONLY:-true}" \
+                      "REFRESH_COOKIE_SAME_SITE=${REFRESH_COOKIE_SAME_SITE:-none}" \
+                      "PORT=4000" \
+                      "NODE_ENV=production" \
+                      "CORS_ORIGIN=${CORS_ORIGIN:-*}" \
+                      > .env
+                  fi
+                  docker compose -f docker-compose.yml down --remove-orphans || \
+                  docker-compose -f docker-compose.yml down --remove-orphans || true
+                  docker compose -f docker-compose.yml up -d --build || \
+                  docker-compose -f docker-compose.yml up -d --build
+
+definitions:
+  caches:
+    node: ~/.npm

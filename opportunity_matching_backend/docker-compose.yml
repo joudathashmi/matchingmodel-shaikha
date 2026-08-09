@@ -1,0 +1,52 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: om-backend-dev
+    working_dir: /app
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,https://opportunity-matcher.deenzprojects.com}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://admin:NTWWYxDsP2gzma4cp9Pt6Ivv9jGy4o@host.docker.internal:5432/opportunity_matcher?schema=public}
+      JWT_ACCESS_TOKEN_SECRET: ${JWT_ACCESS_TOKEN_SECRET:-8e4a7b9836f2b25a6d946f84a51ac7d67d61a530d843c6e2928e33fcfca1f0c12d9a2a7ddac093573112c24505b21944}
+      JWT_REFRESH_TOKEN_SECRET: ${JWT_REFRESH_TOKEN_SECRET:-ea89e27a6a4f995a43b2e10cb5a53cb7b55e2cdccdf19ab1b19fcde8dc0284b9f77a58c4ab78f0a7c79c6dd41e9f4e56}
+      NAFATH_CALLBACK_API_KEY: ${NAFATH_CALLBACK_API_KEY:-c3b1e8eab9124c6fa2b9c945bfac27cc1b61f6b2e29af4ff2a1e882c3419c29e}
+      ACCESS_TOKEN_EXPIRES_IN: ${ACCESS_TOKEN_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-refreshToken}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH:-/api/auth}
+      REFRESH_COOKIE_HTTP_ONLY: ${REFRESH_COOKIE_HTTP_ONLY:-true}
+      REFRESH_COOKIE_SAME_SITE: ${REFRESH_COOKIE_SAME_SITE:-none}
+  # Optional: file change detection when bind mounting from some hosts
+  # CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      # Anonymous volume to prevent host node_modules from shadowing container's
+      - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+#   pgadmin:
+#     image: dpage/pgadmin4:8
+#     container_name: om-pgadmin-dev
+#     environment:
+#       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+#       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+#     ports:
+#       - "5050:80"
+#     volumes:
+#       - pgadmin_data_dev:/var/lib/pgadmin
+#       - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+#     extra_hosts:
+#       - "host.docker.internal:host-gateway"
+#     restart: unless-stopped
+
+# volumes:
+#   pgadmin_data_dev:

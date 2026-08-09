@@ -1,85 +1,148 @@
-# Matching model (SSDAMM)
+# MISA Investor Attraction — Opportunity Matchmaking
 
-Python pipeline for **company–opportunity matching**: sector gating, semantic similarity (embeddings + TF–IDF), GPT validation, ranking, and Excel export.
+Production monorepo for the **Ministry of Investment (MISA)** company–opportunity matching platform:
 
-## Setup
+| Layer | Path | Role |
+|-------|------|------|
+| Matching engine | `matching_v3.py` (+ helpers) | Score, gate, narrate, load `MatchingOutput` |
+| Backend API | `opportunity_matching_backend/` | Express + Prisma + JWT auth + analytics |
+| Frontend portal | `opportunity_matcher_frontend/` | Officer UI (Match Workbench, Analytics, Explore) |
+
+GitHub: [joudathashmi/Matchmakingfinal](https://github.com/joudathashmi/Matchmakingfinal)
+
+---
+
+## Architecture
+
+```
+Companies + Opportunities (PostgreSQL)
+            │
+            ▼
+   matching_v3.py  ──► MatchingOutput (tiers, scores, strengths/risks, engagement)
+            │
+            ▼
+   Backend API :4000  ──► Frontend :3000 (or static CDN)
+```
+
+- **Engine** scores the full company × opportunity matrix, shortlists top‑N per opportunity, runs a GPT gate, writes MISA-scoped narratives, upserts Postgres.
+- **Backend** serves live MatchingOutput metrics (Analytics), Match Case, Pursuit, auth.
+- **Frontend** is the officer desk (no Azure branding in UI).
+
+---
+
+## Prerequisites
+
+- **Node.js** 18+ and npm
+- **Python** 3.11+
+- **PostgreSQL** 14+ with the matchmaking schema (Prisma)
+- Azure OpenAI (chat) and optionally OpenAI embeddings
+
+---
+
+## Quick start (local development)
+
+### 1. Database
+
+Create a Postgres database (example name `matchmaking F`) and apply Prisma migrations from the backend:
 
 ```bash
+cd opportunity_matching_backend
+cp .env.example .env
+# edit DATABASE_URL, JWT secrets, Azure keys
+npm install
+npx prisma migrate deploy   # or: npx prisma db push
+npx prisma generate
+```
+
+### 2. Backend
+
+```bash
+cd opportunity_matching_backend
+npm run dev                 # http://localhost:4000
+```
+
+### 3. Frontend
+
+```bash
+cd opportunity_matcher_frontend
+cp .env.example .env
+# REACT_APP_API_BASE_URL=http://localhost:4000/api
+npm install --legacy-peer-deps
+npm start                   # http://localhost:3000  (uses CRACO)
+```
+
+Default local login (if seeded): `local@rhq.local` / `LocalDev123!`
+
+### 4. Matching engine (optional rematch)
+
+```bash
+cd ..   # SSDAMMModel3 root
 python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+# set Azure OpenAI (+ optional OPENAI_API_KEY for embeddings)
+
+python3 matching_v3.py --source db --replace-matches
 ```
 
-Copy `.env.example` to `.env` and set `OPENAI_API_KEY` (see `business_grade_matching.py` docstring).
+`--source db` loads from Postgres and **clears/replaces** v3 MatchingOutput rows. Do not use small `--limit-*` smokes against a production book without a full follow-up run.
 
-## Main pipeline
+Details: [docs/engine_v3.md](docs/engine_v3.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-Primary script: **`matching_v2.py`**. See [docs/matching_v2.md](docs/matching_v2.md)
-for the full architecture, scoring formula, config knobs, and known issues.
+---
 
-Rough flow:
+## Production checklist
 
-1. Load + normalize companies and opportunities
-2. Vocabulary fit (protected sector vocab, corpus-common suppression, IDF)
-3. Vectorize (OpenAI embeddings, or hybrid TF-IDF fallback)
-4. Percentile-calibrated cosine similarity + specificity correction
-5. Per-pair sector / evidence / soft-match scoring and fusion
-6. Ranking in both directions from one scoring table
-7. Optional GPT validation on qualified top-N (gates label, logs to `gpt_labels.jsonl`)
-8. Export `Output/matches_v2.xlsx` (Opportunity_View, Company_View, All_Pairs, Abstentions, Diagnostics)
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for full steps. Minimum:
 
-```bash
-python3 matching_v2.py                  # auto: OpenAI if key works, else TF-IDF
-python3 matching_v2.py --no-gpt         # skip GPT validation
-python3 matching_v2.py --no-openai      # force TF-IDF fallback
-python3 matching_v2.py --require-openai  # fail hard instead of TF-IDF fallback
+1. Generate new JWT secrets (`openssl rand -hex 64`).
+2. Set production `DATABASE_URL`, `CORS_ORIGIN`, `REFRESH_COOKIE_SECURE=true`.
+3. Point frontend `REACT_APP_API_BASE_URL` at the public API.
+4. Build frontend (`npm run build`) and serve `build/` behind HTTPS.
+5. Run backend with `NODE_ENV=production` (PM2, systemd, or container).
+6. Keep `.env` files off git; use a secrets manager in the host environment.
+7. Rotate any keys that were ever used in local `.env` files.
+
+---
+
+## Documentation map
+
+| Doc | Contents |
+|-----|----------|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deploy, env vars, ops |
+| [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | Day-to-day local workflow |
+| [docs/engine_v3.md](docs/engine_v3.md) | Matching methodology v3 |
+| [docs/matching_v2.md](docs/matching_v2.md) | Legacy v2 engine notes |
+| [docs/API_OVERVIEW.md](docs/API_OVERVIEW.md) | Backend surface for officers / UI |
+| [docs/SECURITY.md](docs/SECURITY.md) | Secrets, auth, CORS |
+| [docs/launch_roadmap.md](docs/launch_roadmap.md) | Product roadmap notes |
+
+---
+
+## Repository layout
+
+```
+SSDAMMModel3/
+  matching_v3.py                 # Primary matching engine
+  on_demand_match_company.py     # Single-company rematch
+  load_to_db_v3.py               # DB load helpers
+  audit_matching_quality.py      # Quality scorecard
+  backfill_match_transparency.py # Narrative / flag polish
+  opportunity_matching_backend/  # Express + Prisma API
+  opportunity_matcher_frontend/  # React (CRA + CRACO) portal
+  docs/                          # Operations & engine docs
+  Output/                        # Generated artifacts (gitignored)
 ```
 
-### Review GUI
+---
 
-Build a self-contained HTML review page from the latest run and open it in any
-browser (no server, works offline):
+## Analytics exports
 
-```bash
-python3 build_review_gui.py            # writes Output/matches_review.html
-open Output/matches_review.html        # macOS; or double-click the file
-```
+Analytics supports PNG/PDF snapshots and **Word / PowerPoint** files with native Office charts (Chart Design → Edit Data). PowerPoint uses `pptxgenjs` via CRACO webpack stubs for Node builtins.
 
-Browse each opportunity's graded candidates (tier, confidence, agreement,
-explanation, evidence), filter by Direct / Partner / Review-Low, see abstentions,
-and record your own Agree / Disagree / Unsure verdict plus notes. Evaluations
-save in the browser and export to CSV.
+---
 
-### Legacy pipeline
+## License / ownership
 
-`business_grade_matching.py` is the older script kept for reference. Its flow:
-preprocessing, sector ontology expansion, sector filtering, semantic
-embedding/similarity, product/service matching, GPT validation, soft-match mode,
-ranking and export. Resume / partial runs:
-
-```bash
-python3 business_grade_matching.py --resume-export
-python3 business_grade_matching.py --resume-from-step8
-```
-
-## Other utilities
-
-| File | Role |
-|------|------|
-| `sector_inference.py` | Sector vocabulary and company enrichment |
-| `matcher_signals.py` | Shared matching helpers (keywords, JSON parsing, labels) |
-| `calibration_report.py` | Calibration / reporting |
-| `extract_opportunities_structured.py` | Structured opportunity extraction |
-| `build_opportunities_xlsx.py` | Build opportunities spreadsheet |
-| `add_emails_to_investors_profiles.py` | Investor profile email enrichment |
-| `process_investment_pdfs.py` | PDF processing helper |
-
-Notebooks: `Code.ipynb`, `Code.executed.ipynb`.
-
-## Data and ignores
-
-Large or local inputs (spreadsheets, pickles, `Data/`, etc.) are excluded via `.gitignore`. The pipeline expects a company workbook such as **`kpmgfile.xlsx`** in the run directory when you execute the full matching flow.
-
-## License
-
-If you add a license, describe it here.
+Internal MISA / Investor Attraction tooling. Do not publish secrets or production database dumps.

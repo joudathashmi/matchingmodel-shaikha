@@ -1,0 +1,19 @@
+image: node:24
+
+pipelines:
+  branches:
+    main:
+    - step:
+        name: Build and Deploy Frontend
+        caches:
+          - node
+        script:
+          - mkdir -p ~/.ssh
+          - cp $BITBUCKET_SSH_KEY_FILE ~/.ssh/id_rsa
+          - chmod 600 ~/.ssh/id_rsa
+          - ssh-keyscan -H $VM_HOST >> ~/.ssh/known_hosts
+
+          - npm install --legacy-peer-deps
+          - CI=false npm run build
+
+          - scp -r build/* $VM_USER@$VM_HOST:/var/www/OpportunityMatcher/frontend/

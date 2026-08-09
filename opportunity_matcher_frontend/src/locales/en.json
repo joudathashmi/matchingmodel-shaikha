@@ -1,0 +1,101 @@
+{
+  "kpi": [
+    {
+      "value": "2,847",
+      "change": "12%",
+      "label": "Total Opportunities",
+      "subLabel": "vs. last month",
+      "isPositive": true
+    },
+    {
+      "value": "156",
+      "change": "8%",
+      "label": "Active Company Profiles",
+      "subLabel": "+13 new this week",
+      "isPositive": true
+    },
+    {
+      "value": "$450M",
+      "change": "23%",
+      "label": "Top Matched Project Value",
+      "subLabel": "NEOM Smart City Hub",
+      "isPositive": true
+    },
+    {
+      "value": "708",
+      "change": "31%",
+      "label": "Environmental Projects",
+      "subLabel": "+167 new this month",
+      "isPositive": true
+    },
+    {
+      "value": "94",
+      "change": "18%",
+      "label": "Opportunities This Week",
+      "subLabel": "trending upward",
+      "isPositive": true
+    }
+  ],
+  "companyGrid": [
+    {
+      "company": "Meituan",
+      "sector": "Tourism & Quality of Life & Hospitality",
+      "product": "Food Delivery: Meituan",
+      "yearFounded": 2010,
+      "website": "http://about.meituan.com",
+      "country": "Saudi Arabia",
+      "employees": 5684,
+      "revenue": "$30M"
+    },
+    {
+      "company": "Acino International Ag",
+      "sector": "Healthcare and Life Sciences",
+      "product": "Extended-Release Formulat...",
+      "yearFounded": 1836,
+      "website": "http://acino.swiss",
+      "country": "United Arab Emirates",
+      "employees": 1836,
+      "revenue": "$35M"
+    },
+    {
+      "company": "Albright Stonebridge Group Llc",
+      "sector": "Professional Services",
+      "product": "Market Entry Strategy",
+      "yearFounded": 2001,
+      "website": "http://albrightstonebridge.com",
+      "country": "United Arab Emirates",
+      "employees": 5421,
+      "revenue": "$20M"
+    },
+    {
+      "company": "Development Dimensions International Inc.",
+      "sector": "Financial Services",
+      "product": "Market Entry Strategy",
+      "yearFounded": 1970,
+      "website": "http://nissin-intl.com/",
+      "country": "Null",
+      "employees": 4752,
+      "revenue": "$42M"
+    },
+    {
+      "company": "Haworth Inc.",
+      "sector": "Industrial & Logistics",
+      "product": "Leadership Development",
+      "yearFounded": 1948,
+      "website": "http://nissin-intl.com/",
+      "country": "United Arab Emirates",
+      "employees": 1241,
+      "revenue": "$25M"
+    },
+    {
+      "company": "Home Box Office Inc",
+      "sector": "Tourism & Quality of Life & Hospitality",
+      "product": "Office Furniture Solution",
+      "yearFounded": 1965,
+      "website": "http://nissin-intl.com/",
+      "country": "Null",
+      "employees": 3254,
+      "revenue": "$56M"
+    }
+  ]
+}

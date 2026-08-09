@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String?
+  passwordHash   String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  bookmarks      Bookmark[]
+  matchAgreement MatchAgreement[]
+  refreshTokens  RefreshToken[]
+  sessions       Session[]
+  roles          UserRole[]
+  auditLogs      AuditLog[]
+  matchComments  MatchComment[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Role {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  users       UserRole[]
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id           String    @id @default(cuid())
+  userId       String
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  lastActivity DateTime  @default(now())
+  expiresAt    DateTime
+  loggedOutAt  DateTime?
+  isActive     Boolean   @default(true)
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([actorId])
+  @@index([entityType])
+}
+
+model Bookmark {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  entityId   Int
+  entityType String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, entityType])
+  @@index([entityType, entityId])
+}
+
+model MatchAgreement {
+  id        Int            @id @default(autoincrement())
+  userId    String
+  matchId   Int
+  status    String
+  createdAt DateTime       @default(now())
+  match     MatchingOutput @relation(fields: [matchId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, matchId], name: "userId_matchId")
+  @@index([userId, matchId])
+}
+
+/** Officer notes / references on a company×opportunity match (shared on Pursuit). */
+model MatchComment {
+  id        String         @id @default(cuid())
+  matchId   Int
+  userId    String
+  body      String
+  createdAt DateTime       @default(now())
+  match     MatchingOutput @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@index([userId])
+}
+
+model DashboardKPI {
+  id           Int      @id @default(autoincrement())
+  page         String
+  name         String
+  value        Float
+  unit         String?
+  calculatedAt DateTime @default(now())
+  sub_title    String?
+
+  @@unique([page, name, calculatedAt], map: "dashboardkpi_unique")
+  @@unique([page, name, calculatedAt], map: "idx_dashboardkpi_unique_page_name_ts")
+  @@index([page], map: "idx_dashboardkpi_page")
+  @@index([page, name], map: "idx_dashboardkpi_page_name")
+}
+
+model OpportunityHeatmap {
+  id                Int      @id @default(autoincrement())
+  sector            String
+  sizeBucket        String
+  opportunityCount  Int
+  avgMatchScore     Float?
+  totalValueMillion Float?
+  density           Float?
+  tooltip           String?
+  calculatedAt      DateTime @db.Timestamp(6)
+
+  @@index([sector, sizeBucket], map: "idx_heatmap_sector_size")
+}
+
+model AIInsight {
+  id          Int      @id @default(autoincrement())
+  page        String
+  insightType String
+  description String
+  score       Float?
+  createdAt   DateTime @default(now())
+
+  @@unique([page, insightType, description], map: "aiinsight_unique")
+  @@unique([page, insightType, description], map: "uidx_aiinsight_page_type_desc")
+  @@index([page], map: "idx_aiinsight_page")
+  @@index([page, insightType], map: "idx_aiinsight_page_type")
+}
+
+model KeyFinding {
+  id             Int      @id @default(autoincrement())
+  page           String
+  title          String
+  detail         String
+  additionaldata Json?
+  createdAt      DateTime @default(now())
+
+  @@unique([page, title, detail], map: "keyfinding_unique")
+  @@index([page, title], map: "idx_keyfinding_page_title")
+}
+
+model Company {
+  id                                 Int              @id @default(autoincrement())
+  company_name                       String
+  company_sector                     String?
+  year_founded                       Int?
+  company_profile                    String?
+  product_services                   String?
+  legal_structure                    String?
+  type_of_entity                     String?
+  status                             String?
+  control_structure                  String?
+  ultimate_parent_company            String?
+  global_headquarters                String?
+  number_of_employees                Int?
+  number_of_locations                Int?
+  fiscal_year_end_date               DateTime?
+  revenue_local_currency             Float?
+  currency                           String?
+  revenue_usd                        Float?
+  presence_of_parent_company_in_mena Boolean?
+  presence_of_company_in_mena        Boolean?
+  type_of_presence                   String?
+  mena_revenue_local_currency        Float?
+  ksa_revenue_local_currency         Float?
+  history_in_mena                    String?
+  presence_in_saudi                  Boolean?
+  type_of_presence_saudi             String?
+  companies_name_in_mena             String?
+  companies_name_in_ksa              String?
+  number_of_employees_parent         Int?
+  number_of_employees_ksa            Int?
+  number_of_employees_mena           Int?
+  mena_locations                     String?
+  mena_notes                         String?
+  rhq_status                         String?
+  rhq_license_status                 String?
+  rhq_country                        String?
+  rhq_city                           String?
+  rhq_country_coverage               String?
+  rhq_entity_name                    String?
+  rhq_in_mena                        Boolean?
+  rhq_number_of_employees            Int?
+  rhq_mandatory_activities           String?
+  rhq_optional_activities            String?
+  website_url                        String?
+  matching_outputs                   MatchingOutput[]
+}
+
+model Opportunity {
+  id                      Int              @id @default(autoincrement())
+  opportunity_name        String
+  sector                  String?
+  opportunity_description String?
+  investment_highlights   String?
+  value_proposition       String?
+  key_demand_drivers      String?
+  key_players             String?
+  materials_required      String?
+  url                     String?
+  economic_impact         String?
+  gdp_impact              String?
+  innovation_index        String?
+  investment_appeal       String?
+  investment_range        String?
+  jobs_created            String?
+  market_readiness        String?
+  match_quality_range     String?
+  region                  String?
+  location                String?
+  project_duration        String?
+  strategic_priority      String?
+  market_size             String?
+  matching_outputs        MatchingOutput[]
+}
+
+model MatchingOutput {
+  id                           Int              @id @default(autoincrement())
+  companyId                    Int
+  opportunityId                Int
+  company_sector               String?
+  opportunity_sector           String?
+  sector_similarity            Float?
+  profile_similarity           Float?
+  product_similarity           Float?
+  ai_score                     Float?
+  ai_decision                  String?
+  final_score                  Float?
+  ai_explanation               String?
+  rank                         Int?
+  ai_insight                   String?
+  suggested_plan               String?
+  match_reason                 String?
+  decision_tier                String?
+  confidence_score             Int?
+  confidence_label             String?
+  evidence_flag                String?
+  value_chain_position         String?
+  strengths                    String?
+  risks                        String?
+  recommended_engagement       String?
+  suggested_localization_model String?
+  model_version                String?
+  matchAgreement               MatchAgreement[]
+  matchComments                MatchComment[]
+  company                      Company          @relation(fields: [companyId], references: [id])
+  opportunity                  Opportunity      @relation(fields: [opportunityId], references: [id])
+
+  @@unique([companyId, opportunityId], map: "uq_company_opportunity")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model SectorsMapping {
+  id            Int     @id @default(autoincrement())
+  source_sector String
+  target_sector String
+  mapping_notes String?
+}

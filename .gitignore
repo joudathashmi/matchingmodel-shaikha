@@ -1,33 +1,59 @@
-# Local secrets — never commit
+# Secrets — never commit
 .env
 .env.*
+!.env.example
+!**/.env.example
 
-# Python / OS
+# Python
 __pycache__/
 *.py[cod]
-.DS_Store
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
 
-# Generated pipeline outputs
+# Node
+node_modules/
+**/build/
+**/dist/
+.npm/
+*.tsbuildinfo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# Generated pipeline outputs & logs
 Output/*.pkl
 Output/*.xlsx
 Output/*.npz
 Output/*.jsonl
 Output/*.html
+Output/*.csv
+Output/*.json
+Output/*.md
+Output/*.log
+Output/*.docx
+_run_output.log
+*.log
 
-# Bulk data, exports, temp Office files (keep repo code-only)
+# Bulk data / Office dumps (keep repo code-only)
 *.xlsx
 *.xls
+*.xlsb
 *.csv
 *.pkl
 *.docx
 *.pdf
+*.pptx
 ~$*
 Data/
 strategicinvestor*/
 
-
-# Ad-hoc logs
-_run_output.log
-Output/*.csv
-Output/*.json
-Output/*.md
+# Nested git backups (local only)
+.git-nested-backup/

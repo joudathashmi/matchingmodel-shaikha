@@ -1,0 +1,10 @@
+{
+  "kpi": [
+    { "value": "٢,٨٤٧", "change": "١٢٪", "label": "إجمالي الفرص", "subLabel": "مقارنة بالشهر الماضي", "isPositive": true },
+    { "value": "١٥٦", "change": "٨٪", "label": "ملفات الشركات النشطة", "subLabel": "+١٣ جديد هذا الأسبوع", "isPositive": true },
+    { "value": "٤٥٠ مليون دولار", "change": "٢٣٪", "label": "قيمة أعلى مشروع مطابق", "subLabel": "مشروع مدينة نيوم الذكية", "isPositive": true },
+    { "value": "١.٨ ثانية", "change": "١٥٪", "label": "متوسط وقت المطابقة", "subLabel": "تحسن في الأداء", "isPositive": false },
+    { "value": "٧٠٨", "change": "٣١٪", "label": "المشاريع البيئية", "subLabel": "+١٦٧ جديد هذا الشهر", "isPositive": true },
+    { "value": "٩٤", "change": "١٨٪", "label": "فرص جديدة هذا الأسبوع", "subLabel": "في تزايد", "isPositive": true }
+  ]
+}

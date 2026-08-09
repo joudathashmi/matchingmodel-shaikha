@@ -40,9 +40,9 @@ from matching_v3 import (  # noqa: E402
     SUMMARY_OPENERS, TIER_ORDER, _pair_seed_pick, apply_evidence_guards,
     calibrate_product_similarity, calibrate_profile_similarity,
     compose_readiness, compute_penalties, confidence_label, confidence_score,
-    decide, detect_corporate_groups, enrich_all, enforce_single_anchor,
-    generate_narrative, gate_cache_key, load_gate_cache, match_type,
-    opportunity_status, product_evidence_level, resolve_sector_node,
+    decide_with_reasons, detect_corporate_groups, enrich_all, enforce_single_anchor,
+    fallback_engagement, generate_narrative, gate_cache_key, load_gate_cache,
+    match_type, opportunity_status, product_evidence_level, resolve_sector_node,
     save_gate_cache, sector_similarity, value_chain_score,
 )
 from load_to_db_v3 import (  # noqa: E402
@@ -301,7 +301,8 @@ def match_company_on_demand(args) -> dict:
         light = (int(agree.split("/")[1]) < 3) if "/" in agree else (r["gate_depth"] == "light")
         hv = {1: "Agree", 0: "Disagree"}.get(
             human.get((r["company_name"], r["opportunity_name"]), -1), "")
-        d = decide(r["final_score"], r["gate"], hv, bool(r["gate"]), light=light)
+        d, gate_reasons = decide_with_reasons(
+            r["final_score"], r["gate"], hv, bool(r["gate"]), light=light)
         comps = [r["sector_similarity"], r["profile_similarity"], r["product_similarity"],
                  r["value_chain_score"], r["investment_readiness_score"]]
         c = confidence_score(r["_comp_len"], 1500, r["_class_conf"], comps,
@@ -310,13 +311,16 @@ def match_company_on_demand(args) -> dict:
                              penalized=bool(r["_penalties"]),
                              evidence_quality=float(r["_evq"]),
                              exact_product=bool(r["_exact"]),
-                             ev_level=int(r["_ev_level"]))
+                             ev_level=int(r["_ev_level"]),
+                             gate=str(r["gate"] or ""),
+                             light=light)
         d, guards = apply_evidence_guards(d, c, float(r["sector_similarity"]),
                                           int(r["_ev_level"]), int(r["_comp_len"]), hv)
+        flags = list(gate_reasons) + list(guards)
         decisions.append(d)
         confidences.append(f"{c} ({confidence_label(c)})")
         ai_scores.append(1 if TIER_ORDER.index(d) <= TIER_ORDER.index("Good Match") else 0)
-        evidence_flags.append(";".join(guards))
+        evidence_flags.append(";".join(flags))
     df["decision"] = decisions
     df["confidence_score"] = confidences
     df["ai_score"] = ai_scores
@@ -369,8 +373,24 @@ def match_company_on_demand(args) -> dict:
         progress(90, "narratives", "Fast mode - skipping narrative generation")
 
     rejected = out_rows["decision"].isin(["Weak Match", "Poor Match"])
-    out_rows.loc[rejected, "recommended_engagement"] = ""
     out_rows.loc[rejected, "suggested_localization_model"] = "Not recommended"
+    for idx, row in out_rows[rejected].iterrows():
+        out_rows.at[idx, "recommended_engagement"] = fallback_engagement(
+            row["decision"],
+            str(row.get("company_name") or ""),
+            str(row.get("_end_product") or ""),
+            role=str(row.get("_role") or ""),
+            sector=str(row.get("opportunity_sector") or ""),
+        )
+    for idx, row in out_rows[~rejected].iterrows():
+        if not str(row.get("recommended_engagement") or "").strip():
+            out_rows.at[idx, "recommended_engagement"] = fallback_engagement(
+                row["decision"],
+                str(row.get("company_name") or ""),
+                str(row.get("_end_product") or ""),
+                role=str(row.get("_role") or ""),
+                sector=str(row.get("opportunity_sector") or ""),
+            )
     out_rows["value_chain_role"] = out_rows["_role"]
     out_rows["business_model"] = out_rows["_bm"]
     out_rows["match_type"] = [
