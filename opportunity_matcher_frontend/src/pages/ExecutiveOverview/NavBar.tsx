@@ -333,9 +333,7 @@ const NavLink = styled(Link)<{ $active?: boolean }>`
     p.$active ? "var(--rhq-text)" : "var(--rhq-text-muted)"};
   background: ${(p) =>
     p.$active ? "rgba(0, 255, 136, 0.1)" : "transparent"};
-  box-shadow: ${(p) =>
-    p.$active ? "inset 2px 0 0 0 rgba(0, 255, 136, 0.85)" : "none"};
-  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, color 0.18s ease;
 
   &:hover {
     color: var(--rhq-text);
