@@ -331,13 +331,9 @@ const HeaderBar = styled.header`
   justify-content: space-between;
   gap: 1.25rem;
   padding: 0.85rem 1.5rem;
-  background: linear-gradient(
-    180deg,
-    rgba(14, 18, 32, 0.92) 0%,
-    rgba(10, 12, 22, 0.88) 100%
-  );
+  background: var(--rhq-header-bg);
   backdrop-filter: blur(22px) saturate(1.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--rhq-border);
 
   &::after {
     content: "";
@@ -423,7 +419,7 @@ const ContextChip = styled.div`
   border-radius: 999px;
   background: rgba(0, 255, 136, 0.06);
   border: 1px solid rgba(0, 200, 140, 0.22);
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--rhq-text-muted);
   font-size: 0.72rem;
   font-weight: 500;
   white-space: nowrap;
@@ -461,8 +457,8 @@ const SearchField = styled.div`
   display: flex;
   align-items: center;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--rhq-input-bg);
+  border: 1px solid var(--rhq-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 
@@ -480,14 +476,14 @@ const SearchInput = styled.input.attrs({ type: "text" })`
   border: none;
   outline: none;
   background: transparent;
-  color: #ffffff;
+  color: var(--rhq-text);
   font-family: inherit;
   font-size: ${typography.button.fontSize};
   font-weight: 500;
   padding: 0.75rem 2.75rem 0.75rem 2.75rem;
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.38);
+    color: var(--rhq-text-muted);
     font-weight: 400;
   }
 `;
@@ -542,13 +538,13 @@ const KbdHint = styled.span`
 
 const Dropdown = styled.div`
   position: fixed;
-  background: rgba(14, 18, 32, 0.98);
+  background: var(--rhq-surface-strong);
   backdrop-filter: blur(18px);
-  color: #fff;
+  color: var(--rhq-text);
   border-radius: 14px;
-  border: 1px solid rgba(0, 200, 140, 0.2);
+  border: 1px solid var(--rhq-border);
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 16px 40px var(--rhq-shadow),
     0 0 0 1px rgba(255, 255, 255, 0.03);
   max-height: min(360px, 55vh);
   overflow-y: auto;
@@ -608,13 +604,13 @@ const ResultText = styled.div`
 const ResultName = styled.div`
   font-size: ${typography.Value.fontSize};
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--rhq-text);
   line-height: 1.3;
 `;
 
 const ResultMeta = styled.div`
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--rhq-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

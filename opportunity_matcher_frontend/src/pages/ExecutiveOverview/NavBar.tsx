@@ -234,11 +234,15 @@ const Sidebar = styled.aside`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(
-    180deg,
-    rgba(12, 16, 28, 0.98) 0%,
-    rgba(8, 10, 18, 0.98) 100%
-  );
+  background: var(--rhq-sidebar-bg);
+
+  html[data-theme="dark"] & {
+    background: linear-gradient(
+      180deg,
+      rgba(12, 16, 28, 0.98) 0%,
+      rgba(8, 10, 18, 0.98) 100%
+    );
+  }
 `;
 
 const BrandBlock = styled.div`
@@ -246,7 +250,7 @@ const BrandBlock = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 1.15rem 1rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--rhq-border);
 `;
 
 const BrandMark = styled.div`
@@ -259,9 +263,9 @@ const BrandMark = styled.div`
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--rhq-text);
+  background: var(--rhq-surface);
+  border: 1px solid var(--rhq-border);
 `;
 
 const BrandText = styled.div`
@@ -274,7 +278,7 @@ const BrandText = styled.div`
 const BrandTitle = styled.div`
   font-size: 0.84rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--rhq-text);
   line-height: 1.25;
   letter-spacing: -0.01em;
 `;
@@ -282,7 +286,7 @@ const BrandTitle = styled.div`
 const BrandSub = styled.div`
   font-size: 0.7rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--rhq-text-muted);
   line-height: 1.2;
 `;
 
@@ -314,7 +318,7 @@ const NavSection = styled.div`
 const SectionLabel = styled.div`
   font-size: 0.68rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.38);
+  color: var(--rhq-text-muted);
   padding: 0 0.55rem 0.45rem;
   letter-spacing: 0.02em;
 `;
@@ -329,7 +333,7 @@ const NavLink = styled(Link)<{ $active?: boolean }>`
   font-size: ${typography.Value.fontSize};
   font-weight: 500;
   color: ${(p) =>
-    p.$active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.62)"};
+    p.$active ? "var(--rhq-text)" : "var(--rhq-text-muted)"};
   background: ${(p) =>
     p.$active ? "rgba(0, 255, 136, 0.1)" : "transparent"};
   box-shadow: ${(p) =>
@@ -337,10 +341,11 @@ const NavLink = styled(Link)<{ $active?: boolean }>`
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 
   &:hover {
-    color: rgba(255, 255, 255, 0.95);
+    color: var(--rhq-text);
     background: ${(p) =>
-      p.$active ? "rgba(0, 255, 136, 0.12)" : "rgba(255, 255, 255, 0.05)"};
+      p.$active ? "rgba(0, 255, 136, 0.12)" : "var(--rhq-surface)"};
   }
+
 `;
 
 const LogoutBtn = styled.button`
@@ -356,13 +361,13 @@ const LogoutBtn = styled.button`
   font-family: inherit;
   font-size: ${typography.Value.fontSize};
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--rhq-text-muted);
   text-align: left;
   transition: background 0.18s ease, color 0.18s ease;
 
   &:hover {
-    color: rgba(255, 255, 255, 0.9);
-    background: rgba(255, 255, 255, 0.045);
+    color: var(--rhq-text);
+    background: var(--rhq-surface);
   }
 `;
 
@@ -398,8 +403,8 @@ const NavLabel = styled.span`
 
 const SidebarFooter = styled.div`
   padding: 0.85rem 0.85rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid var(--rhq-border);
+  background: var(--rhq-surface);
 `;
 
 const UserProfile = styled.div`
@@ -408,21 +413,21 @@ const UserProfile = styled.div`
   gap: 0.7rem;
   padding: 0.55rem 0.6rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--rhq-surface);
+  border: 1px solid var(--rhq-border);
 `;
 
 const UserAvatar = styled.div`
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--rhq-surface);
+  border: 1px solid var(--rhq-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--rhq-text);
   font-size: 0.72rem;
   flex-shrink: 0;
 `;
@@ -437,7 +442,7 @@ const UserInfoText = styled.div`
 const UserName = styled.div`
   font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--rhq-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

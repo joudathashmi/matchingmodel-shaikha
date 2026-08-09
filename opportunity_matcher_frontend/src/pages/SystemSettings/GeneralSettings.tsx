@@ -29,7 +29,7 @@ const media = {
 const SettingsContainer = styled.div`
   max-width: 720px;
   margin: 0;
-  color: #ffffff;
+  color: var(--rhq-text);
   padding: 0;
   box-sizing: border-box;
   font-family: "DM Sans", sans-serif;
@@ -55,7 +55,7 @@ const SectionTitle = styled.h2`
   font-size: ${typography.smallTitle.fontSize};
   font-weight: ${typography.smallTitle.fontWeight};
   margin: 0 0 1.25rem;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--rhq-text);
   line-height: 1.3;
 `;
 
@@ -79,14 +79,14 @@ const SubsectionTitle = styled.h3`
   font-size: ${typography.Label.fontSize};
   font-weight: ${typography.Label.fontWeight};
   margin: 0 0 0.4rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--rhq-text);
   line-height: 1.35;
 `;
 
 const Description = styled.p`
   font-size: ${typography.Value.fontSize};
   font-weight: ${typography.Value.fontWeight};
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--rhq-text-muted);
   margin: 0 0 0.85rem;
   line-height: 1.45;
 `;
@@ -96,7 +96,7 @@ const SettingRow = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 1rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--rhq-border);
   gap: 1.5rem;
 
   ${media.tablet} {
@@ -387,6 +387,17 @@ const CurrentValue = styled.span`
   font-weight: ${typography.Value.fontWeight};
 `;
 
+const ThemeLocked = styled.span`
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+`;
+
 // Additional responsive utility components
 const ResponsiveGrid = styled.div`
   display: grid;
@@ -438,7 +449,6 @@ const GeneralSettings = () => {
   // Toggle states
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showMetrics, setShowMetrics] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
 
   // Dropdown states
   const [language, setLanguage] = useState("English");
@@ -526,18 +536,14 @@ const GeneralSettings = () => {
         </Subsection>
 
         <Subsection>
-          <SubsectionTitle>Dark Mode</SubsectionTitle>
-          <Description>Use dark theme for better visibility</Description>
+          <SubsectionTitle>Appearance</SubsectionTitle>
+          <Description>
+            The matching desk uses the dark theme so score cards, maps, and
+            evidence panels stay high-contrast for officers.
+          </Description>
           <SettingRow>
-            <CurrentValue>{darkMode ? "Enabled" : "Disabled"}</CurrentValue>
-            <ToggleSwitch>
-              <input
-                type="checkbox"
-                checked={darkMode}
-                onChange={() => setDarkMode(!darkMode)}
-              />
-              <span />
-            </ToggleSwitch>
+            <CurrentValue>Dark theme</CurrentValue>
+            <ThemeLocked>Always on</ThemeLocked>
           </SettingRow>
         </Subsection>
       </Section>

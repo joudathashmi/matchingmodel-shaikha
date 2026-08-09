@@ -39,6 +39,9 @@ Output/*.json
 Output/*.md
 Output/*.log
 Output/*.docx
+Output/db_exports/
+*.dump
+*.sql.gz
 _run_output.log
 *.log
 

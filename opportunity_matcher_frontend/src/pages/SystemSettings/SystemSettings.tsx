@@ -258,7 +258,7 @@ const SystemSettings: React.FC = () => {
 export default SystemSettings;
 
 const StatusText = styled.div`
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--rhq-text-muted);
   font-size: ${typography.paragraph.fontSize};
   font-weight: ${typography.paragraph.fontWeight};
 `;
@@ -272,7 +272,7 @@ const PageTitle = styled.h1`
   margin: 0 0 0.4rem;
   font-size: ${typography.pageTitle.fontSize};
   font-weight: ${typography.pageTitle.fontWeight};
-  color: #ffffff;
+  color: var(--rhq-text);
   letter-spacing: -0.01em;
   line-height: 1.2;
 `;
@@ -281,7 +281,7 @@ const PageSubtitle = styled.p`
   margin: 0;
   font-size: ${typography.paragraph.fontSize};
   font-weight: ${typography.paragraph.fontWeight};
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--rhq-text-muted);
   line-height: 1.45;
 `;
 
@@ -295,8 +295,8 @@ const SettingsGrid = styled.div`
 const SettingCard = styled.button`
   appearance: none;
   text-align: left;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--rhq-surface);
+  border: 1px solid var(--rhq-border);
   border-radius: 12px;
   padding: 1.25rem 1.2rem 1.35rem;
   display: flex;
@@ -355,7 +355,7 @@ const CardTitle = styled.h3`
   margin: 0;
   font-size: ${typography.Label.fontSize};
   font-weight: ${typography.Label.fontWeight};
-  color: #ffffff;
+  color: var(--rhq-text);
   line-height: 1.3;
 `;
 
@@ -363,14 +363,14 @@ const CardDesc = styled.p`
   margin: 0;
   font-size: ${typography.Value.fontSize};
   font-weight: ${typography.Value.fontWeight};
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--rhq-text-muted);
   line-height: 1.4;
 `;
 
 const BackButton = styled.button`
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--rhq-surface);
+  border: 1px solid var(--rhq-border);
+  color: var(--rhq-text);
   padding: 0.55rem 0.9rem;
   border-radius: 8px;
   cursor: pointer;

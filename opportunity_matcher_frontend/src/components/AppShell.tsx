@@ -132,8 +132,8 @@ const Backdrop = styled.button<{ $open: boolean }>`
 const Sidebar = styled.aside<{ $open: boolean }>`
   grid-column: 1;
   grid-row: 2 / -1;
-  background: rgba(255, 255, 255, 0.03);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--rhq-sidebar-bg);
+  border-right: 1px solid var(--rhq-border);
   overflow: hidden;
   min-height: 0;
   min-width: 0;

@@ -5,6 +5,15 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import "./i18n"; // 👈 import i18n config
 
+// Desk UI is dark-first — force dark so a prior light preference cannot wash out text
+try {
+  localStorage.setItem("rhq.settings.theme", "dark");
+} catch {
+  /* ignore */
+}
+document.documentElement.setAttribute("data-theme", "dark");
+document.documentElement.style.colorScheme = "dark";
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

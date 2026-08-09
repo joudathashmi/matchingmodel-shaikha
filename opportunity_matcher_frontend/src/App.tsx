@@ -10,21 +10,25 @@ import AuthBootstrap from "./components/AuthBootstrap";
 import { TourProvider } from "./tour/TourContext";
 import GuidedTour from "./tour/GuidedTour";
 import AssistantChat from "./components/AssistantChat";
-import { useTranslation } from "react-i18next";
+import { ThemeProvider } from "./theme/ThemeContext";
+import { themeCss } from "./theme/themeStyles";
 
 const GlobalStyle = createGlobalStyle`
+  ${themeCss}
+
   body {
     font-family: "DM Sans", sans-serif;
     background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(0, 255, 136, 0.07), transparent 55%),
-      radial-gradient(900px 500px at 95% 0%, rgba(0, 180, 216, 0.08), transparent 50%),
-      linear-gradient(160deg, #07090f 0%, #0d1220 45%, #10182a 100%);
+      radial-gradient(1200px 600px at 10% -10%, var(--rhq-glow-a), transparent 55%),
+      radial-gradient(900px 500px at 95% 0%, var(--rhq-glow-b), transparent 50%),
+      linear-gradient(160deg, var(--rhq-bg-0) 0%, var(--rhq-bg-1) 45%, var(--rhq-bg-2) 100%);
     background-attachment: fixed;
-    color: #ffffff;
+    color: var(--rhq-text);
     overflow-x: hidden;
     min-height: 100vh;
     margin: 0;
     padding: 0;
+    transition: background 0.25s ease, color 0.2s ease;
   }
 
   *,
@@ -41,9 +45,9 @@ const GlobalStyle = createGlobalStyle`
   }
 
   .Toastify__toast {
-    background: #1a1a2e;
-    color: #ffffff;
-    border: 1px solid #2d2d4d;
+    background: var(--rhq-surface-strong);
+    color: var(--rhq-text);
+    border: 1px solid var(--rhq-border);
     border-radius: 8px;
   }
 
@@ -52,7 +56,7 @@ const GlobalStyle = createGlobalStyle`
   }
 
   .Toastify__close-button {
-    color: #ffffff;
+    color: var(--rhq-text);
   }
 
   .Toastify__toast--error {
@@ -86,18 +90,15 @@ const GlobalStyle = createGlobalStyle`
       background: #3b82f6;
     }
   }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
 `;
 
-const App: React.FC = () => {
-  const { t, i18n } = useTranslation();
-
-  const changeLang = (lang: "en" | "ar") => {
-    i18n.changeLanguage(lang);
-    document.body.dir = lang === "ar" ? "rtl" : "ltr";
-  };
-
+const ThemedApp: React.FC = () => {
   return (
-    <Provider store={store}>
+    <>
       <GlobalStyle />
       <Router>
         <TourProvider>
@@ -107,7 +108,6 @@ const App: React.FC = () => {
           <AssistantChat />
         </TourProvider>
       </Router>
-      {/* ToastContainer with custom styling */}
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -120,6 +120,16 @@ const App: React.FC = () => {
         pauseOnHover
         theme="dark"
       />
+    </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Provider store={store}>
+      <ThemeProvider>
+        <ThemedApp />
+      </ThemeProvider>
     </Provider>
   );
 };
