@@ -18,8 +18,8 @@ If a key was ever stored in a local `.env` that may have been shared, **rotate i
 - Production: `REFRESH_COOKIE_SECURE=true`, HTTPS only.
 - Restrict `CORS_ORIGIN` to known frontend hosts.
 - Disable SSO (`ENABLE_SSO=false`) until Nafath integration is fully hardened.
-- Login is rate-limited (20 / 15 min); forgot-password (5 / hour); reset-password (10 / hour).
-- Password-reset tokens are never written to logs. Dev-only link reveal requires `PASSWORD_RESET_DEV_RETURN_LINK=true` and non-production `NODE_ENV`.
+- Login is rate-limited (20 / 15 min).
+- Self-service forgot-password / email reset is disabled until SMTP is integrated. Admins reset passwords under Settings → Users.
 - Do not publish seed or README passwords. Bootstrap local users via Prisma seed only.
 
 ## Database scripts

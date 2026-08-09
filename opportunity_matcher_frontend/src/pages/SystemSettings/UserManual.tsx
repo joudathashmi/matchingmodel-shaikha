@@ -33,8 +33,9 @@ const SECTIONS: Section[] = [
             the desk.
           </li>
           <li>
-            If you forget your password, use <em>Forgot password?</em> on the
-            sign-in screen.
+            If you forget your password, ask an administrator to set a temporary
+            password (Settings → Users), or contact DBI@misa.gov.sa. Self-service
+            email reset is not enabled yet.
           </li>
           <li>
             There is no public sign-up. Accounts are created by an administrator

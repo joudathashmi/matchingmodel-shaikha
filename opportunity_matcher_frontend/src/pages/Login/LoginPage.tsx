@@ -302,7 +302,7 @@ const LoginPage: React.FC = () => {
 
           <FooterStack>
             <ForgotPasswordLink to="/forgot-password">
-              Forgot password?
+              Need a password reset?
             </ForgotPasswordLink>
             <HelpLine>
               Need access? Contact{" "}

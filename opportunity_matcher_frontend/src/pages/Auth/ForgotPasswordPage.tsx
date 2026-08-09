@@ -1,62 +1,33 @@
-import React, { useState } from "react";
+import React from "react";
 import styled from "styled-components";
 import { Link } from "react-router-dom";
-import { forgotPassword } from "../../store/services/authService";
-import { toastError, toastSuccess } from "../../common/toast";
 import AnimatedLoginBackground from "../Login/AnimatedLoginBackground";
 import loginLogo from "../../assets/Login-page-icon/Ministry_of_Investment_Logo-white.svg";
 
+/**
+ * Self-service email reset is not enabled. Officers are directed to an admin.
+ */
 const ForgotPasswordPage: React.FC = () => {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
-
-  const submit = async () => {
-    if (!email.trim() || !email.includes("@")) {
-      toastError("Enter a valid email address");
-      return;
-    }
-    setBusy(true);
-    setResetUrl(null);
-    try {
-      const res = await forgotPassword(email.trim().toLowerCase());
-      toastSuccess(res.message);
-      if (res.resetUrl) setResetUrl(res.resetUrl);
-    } catch (e: any) {
-      toastError(e?.response?.data?.message || e?.message || "Request failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <>
       <AnimatedLoginBackground />
       <Wrap>
         <Card>
           <Logo src={loginLogo} alt="Ministry of Investment" />
-          <Title>Reset your password</Title>
+          <Title>Password help</Title>
           <Lead>
-            Enter the email for your officer account. If it exists, a reset link
-            will be issued. Accounts are created by an administrator only.
+            Self-service password reset is not available yet. Ask a desk
+            administrator to set a temporary password for your account, or
+            contact{" "}
+            <Mail href="mailto:DBI@misa.gov.sa">DBI@misa.gov.sa</Mail>.
           </Lead>
-          <Label>Email</Label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@misa.gov.sa"
-            onKeyDown={(e) => e.key === "Enter" && void submit()}
-          />
-          <Primary type="button" disabled={busy} onClick={() => void submit()}>
-            {busy ? "Sending…" : "Send reset link"}
-          </Primary>
-          {resetUrl ? (
-            <DevBox>
-              <strong>Development reset link</strong>
-              <a href={resetUrl}>{resetUrl}</a>
-            </DevBox>
-          ) : null}
+          <Steps>
+            <li>Sign in is limited to accounts created by an administrator.</li>
+            <li>
+              An admin can reset your password under Settings → Users, then you
+              set a new one on first sign-in.
+            </li>
+          </Steps>
           <Back to="/">Back to sign in</Back>
         </Card>
       </Wrap>
@@ -83,7 +54,7 @@ const Card = styled.div`
   padding: 1.75rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.85rem;
 `;
 
 const Logo = styled.img`
@@ -100,61 +71,37 @@ const Title = styled.h1`
 `;
 
 const Lead = styled.p`
-  margin: 0 0 0.5rem;
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.65);
-`;
-
-const Label = styled.label`
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.55);
-`;
-
-const Input = styled.input`
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  border-radius: 8px;
-  padding: 0.7rem 0.85rem;
+  margin: 0;
   font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
 `;
 
-const Primary = styled.button`
-  margin-top: 0.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border-radius: 8px;
-  padding: 0.7rem 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
+const Mail = styled.a`
+  color: #00d084;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
   }
 `;
 
-const DevBox = styled.div`
-  margin-top: 0.5rem;
-  padding: 0.75rem;
-  border-radius: 8px;
-  background: rgba(230, 190, 80, 0.1);
-  border: 1px solid rgba(230, 190, 80, 0.35);
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.85);
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  word-break: break-all;
-  a {
-    color: #f0d78a;
+const Steps = styled.ul`
+  margin: 0;
+  padding-left: 1.15rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.82rem;
+  line-height: 1.5;
+
+  li + li {
+    margin-top: 0.4rem;
   }
 `;
 
 const Back = styled(Link)`
-  margin-top: 0.5rem;
-  color: rgba(255, 255, 255, 0.7);
+  margin-top: 0.35rem;
+  color: rgba(255, 255, 255, 0.75);
   font-size: 0.85rem;
   text-align: center;
 `;

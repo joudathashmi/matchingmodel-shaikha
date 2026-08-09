@@ -12,10 +12,6 @@ import logger from "../../utils/logger";
 const prisma = new PrismaClient();
 
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || "refreshToken";
-const APP_PUBLIC_URL =
-  process.env.APP_PUBLIC_URL ||
-  process.env.CORS_ORIGIN?.split(",")[0]?.trim() ||
-  "http://localhost:3000";
 
 /** Public self-registration is disabled — admins create accounts. */
 export const register = async (_req: Request, res: Response) => {
@@ -59,46 +55,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 };
 
 /**
- * Always returns a generic success message (no email enumeration).
- * Dev-only: when NODE_ENV !== production AND PASSWORD_RESET_DEV_RETURN_LINK=true, includes resetUrl.
+ * Self-service email reset is intentionally disabled until SMTP / enterprise
+ * mail is wired. Officers must ask an admin (Settings → Users) or DBI.
  */
-export const forgotPassword = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const email = String(req.body.email || "").trim().toLowerCase();
-    const issued = await userService.issuePasswordResetToken(email);
-
-    const generic = {
-      message:
-        "If an account exists for that email, password reset instructions have been issued.",
-    };
-
-    if (!issued) {
-      return res.json(generic);
-    }
-
-    const resetUrl = `${APP_PUBLIC_URL.replace(/\/$/, "")}/reset-password?token=${issued.rawToken}`;
-    // Never log the raw token or full reset URL (NCA / secrets hygiene).
-    logger.info(
-      { email: issued.user.email, expiresAt: issued.expiresAt },
-      "Password reset token issued"
-    );
-
-    const reveal =
-      process.env.NODE_ENV !== "production" &&
-      process.env.PASSWORD_RESET_DEV_RETURN_LINK === "true";
-
-    if (reveal) {
-      return res.json({ ...generic, resetUrl, expiresAt: issued.expiresAt });
-    }
-
-    return res.json(generic);
-  } catch (err) {
-    next(err);
-  }
+export const forgotPassword = async (_req: Request, res: Response) => {
+  return res.status(503).json({
+    message:
+      "Self-service password reset is not available. Ask an administrator to set a temporary password, or contact DBI@misa.gov.sa.",
+  });
 };
 
 export const resetPassword = async (

@@ -246,7 +246,7 @@ export default function RoleManagement() {
           </SubmitBtn>
           <Hint>
             New users must change the temporary password on first sign-in.
-            They can also use Forgot password on the login screen.
+            If they forget it later, set a new temporary password here.
           </Hint>
         </AddForm>
       )}
