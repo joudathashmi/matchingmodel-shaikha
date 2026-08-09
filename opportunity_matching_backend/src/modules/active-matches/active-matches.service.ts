@@ -78,8 +78,19 @@ export async function getMappedSectorsWithCount(ai_decision?: string, topRank?: 
     .sort((a, b) => b.count - a.count);
 }
 
+const PURSUE_TIERS = ["Excellent Match", "Strong Match", "Good Match"];
+
 export async function getActiveMatches(filters: ActiveMatchesDTO, userId: string) {
-  const { sectors, companies, ai_decision, final_score, page, limit } = filters;
+  const {
+    sectors,
+    companies,
+    ai_decision,
+    decision_tier,
+    pursue_only,
+    final_score,
+    page,
+    limit,
+  } = filters;
   const skip = (page - 1) * limit;
 
   let sourceSectors: string[] | undefined = undefined;
@@ -93,6 +104,17 @@ export async function getActiveMatches(filters: ActiveMatchesDTO, userId: string
     sourceSectors = mappings.map((m) => m.source_sector);
   }
 
+  const tierFilter = pursue_only
+    ? { decision_tier: { in: PURSUE_TIERS } }
+    : decision_tier
+      ? {
+          decision_tier: {
+            contains: decision_tier,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        }
+      : {};
+
   const where: Prisma.MatchingOutputWhereInput = {
     ...(ai_decision
       ? { ai_decision: { equals: ai_decision, mode: Prisma.QueryMode.insensitive } }
@@ -103,6 +125,7 @@ export async function getActiveMatches(filters: ActiveMatchesDTO, userId: string
     ...(companies && companies.length > 0
       ? { company: { company_name: { in: companies, mode: Prisma.QueryMode.insensitive } } }
       : {}),
+    ...tierFilter,
     ...(final_score
       ? {
           final_score: {

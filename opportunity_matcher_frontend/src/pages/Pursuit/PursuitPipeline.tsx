@@ -18,6 +18,7 @@ import { selectCanViewTeamPursuits } from "../../store/selectors/getUserRoleSele
 import typography from "../../common/typography";
 import PursuitNotes, { MatchComment } from "./PursuitNotes";
 import axiosClient from "../../api/axiosClient";
+import { pushRecentDesk } from "../../common/recentDesk";
 
 const PursuitPipeline: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -150,7 +151,16 @@ const PursuitPipeline: React.FC = () => {
                   {(columns[stage.id] || []).map((a) => (
                     <Card key={a.id}>
                       <CardCompany
-                        onClick={() => navigate(`/matches/${a.match.id}`)}
+                        onClick={() => {
+                          pushRecentDesk({
+                            kind: "pursuit",
+                            matchId: a.match.id,
+                            companyName: a.match.company_name,
+                            opportunityName: a.match.opportunity_name,
+                            subtitle: stage.label,
+                          });
+                          navigate(`/matches/${a.match.id}`);
+                        }}
                       >
                         {a.match.company_name}
                       </CardCompany>
@@ -192,7 +202,18 @@ const PursuitPipeline: React.FC = () => {
               <Cards>
                 {(columns.Hold || []).map((a) => (
                   <Card key={a.id}>
-                    <CardCompany onClick={() => navigate(`/matches/${a.match.id}`)}>
+                    <CardCompany
+                      onClick={() => {
+                        pushRecentDesk({
+                          kind: "pursuit",
+                          matchId: a.match.id,
+                          companyName: a.match.company_name,
+                          opportunityName: a.match.opportunity_name,
+                          subtitle: "Hold",
+                        });
+                        navigate(`/matches/${a.match.id}`);
+                      }}
+                    >
                       {a.match.company_name}
                     </CardCompany>
                     <CardOpp>{a.match.opportunity_name}</CardOpp>

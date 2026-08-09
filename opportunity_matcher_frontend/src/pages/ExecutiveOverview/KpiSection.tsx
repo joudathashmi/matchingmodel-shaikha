@@ -38,7 +38,19 @@ const KPISection: React.FC<KPISectionProps> = ({ kpis }) => {
             <PrimaryCard
               key={kpi.name}
               $accent={kpi.accent || "pursue"}
-              onClick={() => navigate("/match-workbench")}
+              onClick={() => {
+                const name = (kpi.name || "").toLowerCase();
+                if (name.includes("excellent")) {
+                  navigate("/match-workbench?tier=Excellent");
+                } else if (
+                  name.includes("pursue") ||
+                  name.includes("high confidence")
+                ) {
+                  navigate("/match-workbench?focus=pursue");
+                } else {
+                  navigate("/match-workbench");
+                }
+              }}
               data-tooltip-id="tooltip-pulse"
               data-tooltip-content={kpi.subTitle}
             >

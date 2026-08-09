@@ -18,6 +18,7 @@ import { LoadingSpinnerWithMessage } from "../../common/LoaderSpinner&ErrorLayou
 import { ErrorMessage } from "../../common/LoaderSpinner&ErrorLayout/ErrorMessage";
 import EngagementPlanPopup from "../ActiveMatches/Cards/EngagementPlanPopup ";
 import { toastSuccess } from "../../common/toast";
+import { pushRecentDesk } from "../../common/recentDesk";
 
 const MatchCaseWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +35,16 @@ const MatchCaseWorkspace: React.FC = () => {
       try {
         setLoading(true);
         const data = await getMatchById(Number(id));
-        if (!cancelled) setMatch(data);
+        if (!cancelled) {
+          setMatch(data);
+          pushRecentDesk({
+            kind: "match",
+            matchId: data.id,
+            companyName: data.companyName,
+            opportunityName: data.opportunityName,
+            subtitle: data.decisionTier || undefined,
+          });
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || "Failed to load match case");
       } finally {

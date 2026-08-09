@@ -1,6 +1,7 @@
 import styled, { css, keyframes } from 'styled-components';
 import InfrastructureCard from './InfrastructureCard';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { getSectorCounts } from '../../store/actions/actionSectorActions';
 import { selectSectorCounts, selectSectorCountsLoading, selectSectorCountsError } from '../../store/selectors/sectorCountsSelectors';
@@ -14,6 +15,12 @@ import typography from '../../common/typography';
 
 const MatchesCard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const [searchParams] = useSearchParams();
+  const focusParam = (searchParams.get("focus") || "").toLowerCase();
+  const tierParam = (searchParams.get("tier") || "").trim();
+  const pursueOnly = focusParam === "pursue";
+  const decisionTier = !pursueOnly && tierParam ? tierParam : undefined;
+  const deskFocusActive = pursueOnly || Boolean(decisionTier);
 
   const companies = useSelector(selectCompanies);
   const companiesLoading = useSelector(selectCompaniesLoading);
@@ -26,7 +33,8 @@ const MatchesCard: React.FC = () => {
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [sliderValue, setSliderValue] = useState(0);
-  const [minValue, setMinValue] = useState(78);
+  // Desk focus links should not hide lower-score Good/Strong pairs behind 78%.
+  const [minValue, setMinValue] = useState(deskFocusActive ? 0 : 78);
   const [maxValue, setMaxValue] = useState(100);
 
   const [selectedCompanies, setSelectedCompanies] = useState<number[]>([]);
@@ -42,9 +50,16 @@ const MatchesCard: React.FC = () => {
     selectedCompanies: [] as number[],
     selectedSectors: [] as number[],
     selectedAIDecisions: [] as number[],
-    minValue: 78,
+    minValue: deskFocusActive ? 0 : 78,
     maxValue: 100
   });
+
+  useEffect(() => {
+    if (deskFocusActive) {
+      setMinValue(0);
+      setMaxValue(100);
+    }
+  }, [deskFocusActive, pursueOnly, decisionTier]);
 
   const aiDecisions = [
     { id: 1, name: "Yes" },
@@ -180,6 +195,8 @@ const MatchesCard: React.FC = () => {
         sectors: sectorNames,
         companies: companyNames,
         ai_decision: aiDecision,
+        decision_tier: decisionTier,
+        pursue_only: pursueOnly || undefined,
         final_score: {
           min: minValue / 100,
           max: maxValue / 100,
@@ -188,7 +205,20 @@ const MatchesCard: React.FC = () => {
         limit,
       })
     );
-  }, [selectedCompanies, selectedSectors, selectedAIDecisions, minValue, maxValue, currentPage, limit, dispatch, companies, sectorCounts]);
+  }, [
+    selectedCompanies,
+    selectedSectors,
+    selectedAIDecisions,
+    minValue,
+    maxValue,
+    currentPage,
+    limit,
+    dispatch,
+    companies,
+    sectorCounts,
+    decisionTier,
+    pursueOnly,
+  ]);
 
   useEffect(() => {
     if (!isDraggingRef.current) {
@@ -261,6 +291,16 @@ const MatchesCard: React.FC = () => {
         <WorkbenchSub>
           Ranked company-opportunity pairs. Open a case for evidence, then move deals into Pursuit.
         </WorkbenchSub>
+        {(pursueOnly || decisionTier) && (
+          <FocusBanner>
+            Showing{" "}
+            {pursueOnly
+              ? "pursue queue (Excellent · Strong · Good)"
+              : `${decisionTier} tier`}
+            .{" "}
+            <FocusClear to="/match-workbench">Clear focus</FocusClear>
+          </FocusBanner>
+        )}
       </WorkbenchIntro>
       <DropdownSection ref={dropdownRef}>
         
@@ -480,6 +520,31 @@ const WorkbenchSub = styled.p`
   font-weight: ${typography.paragraph.fontWeight};
   color: rgba(255, 255, 255, 0.62);
   line-height: 1.45;
+`;
+
+const FocusBanner = styled.div`
+  margin-top: 0.75rem;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 200, 140, 0.3);
+  background: rgba(0, 255, 136, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.8rem;
+  font-weight: 500;
+`;
+
+const FocusClear = styled(Link)`
+  color: #9ef0c8;
+  font-weight: 650;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const DropdownSection = styled.div`

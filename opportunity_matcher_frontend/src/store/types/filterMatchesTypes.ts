@@ -66,6 +66,8 @@ export interface ActiveMatchesRequest {
   sectors?: string[];
   companies?: string[];
   ai_decision?: string;
+  decision_tier?: string;
+  pursue_only?: boolean;
   final_score?: {
     min: number;
     max: number;

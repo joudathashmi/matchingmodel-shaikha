@@ -17,6 +17,7 @@ import matchAgreement from './services/match-agreement/match-agreement.routes';
 import matchCommentRoutes from './services/match-comment/match-comment.routes';
 import commonDataRoutes from './services/common-data/common-data.routes';
 import auditRoutes from './services/audit/audit.routes';
+import identityProviderRoutes from './modules/identity-provider/identity-provider.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import logger from './utils/logger';
 import pinoHttp from 'pino-http';
@@ -78,6 +79,7 @@ app.use("/api/match-agreement", matchAgreement);
 app.use("/api/match-comments", matchCommentRoutes);
 app.use("/api/common-data", commonDataRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/identity-provider", identityProviderRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

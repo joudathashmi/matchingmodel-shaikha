@@ -4,6 +4,7 @@ import AppShell from "../../components/AppShell";
 import GeneralSettings from "./GeneralSettings";
 import RoleManagement from "./RoleManagement";
 import UserManual from "./UserManual";
+import ActiveDirectorySettings from "./ActiveDirectorySettings";
 import {
   MatchingSettingsPanel,
   AlertsSettingsPanel,
@@ -111,6 +112,14 @@ const SETTINGS: SettingItem[] = [
     title: "Users & roles",
     description: "Add users and assign Officer, Reviewer, or Admin",
     icon: teamManagementIcon,
+    adminOnly: true,
+    ready: true,
+  },
+  {
+    id: "active-directory",
+    title: "Active Directory",
+    description: "Prepare SSO / AD parameters for later enterprise sign-in",
+    icon: securityIcon,
     adminOnly: true,
     ready: true,
   },
@@ -239,6 +248,9 @@ const SystemSettings: React.FC = () => {
             {active.id === "backup-export" && <ExportSettingsPanel />}
             {active.id === "billing" && <LicensingSettingsPanel />}
             {active.id === "role-management" && isAdmin && <RoleManagement />}
+            {active.id === "active-directory" && isAdmin && (
+              <ActiveDirectorySettings />
+            )}
             {active.id === "audit-log" && isAdmin && <AuditLogPanel />}
             {!active.ready && (
               <ComingSoon>

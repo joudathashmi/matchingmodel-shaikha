@@ -82,6 +82,14 @@ model AuditLog {
   @@index([entityType])
 }
 
+/// Admin-managed key/value config (e.g. Active Directory / enterprise SSO prep)
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
 model Bookmark {
   id         Int      @id @default(autoincrement())
   userId     String

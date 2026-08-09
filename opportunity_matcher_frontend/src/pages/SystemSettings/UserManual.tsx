@@ -188,6 +188,12 @@ const SECTIONS: Section[] = [
             access without user management.
           </li>
         </ul>
+        <p>
+          In Settings → <strong>Active Directory</strong> (admins only), store
+          Entra ID / AD / LDAP parameters for a later SSO cutover. Saving
+          parameters does not enable live directory login until engineering
+          flips runtime SSO.
+        </p>
       </>
     ),
   },
