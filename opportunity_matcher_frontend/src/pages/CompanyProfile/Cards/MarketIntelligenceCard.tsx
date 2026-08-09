@@ -618,7 +618,9 @@ const CATEGORY_ORDER = [
 
 function orderedCategoryKeys(categories: { [category: string]: unknown } | null | undefined): string[] {
   const keys = Object.keys(categories || {}).filter((k) => k !== "_meta");
-  const rank = new Map(CATEGORY_ORDER.map((name, i) => [name, i]));
+  const rank = new Map<string, number>(
+    CATEGORY_ORDER.map((name, i) => [name, i])
+  );
   return keys.sort((a, b) => {
     const ai = rank.has(a) ? rank.get(a)! : 999;
     const bi = rank.has(b) ? rank.get(b)! : 999;
