@@ -470,12 +470,13 @@ export async function getPageAIDataForCompany() {
     );
   }
 
+  // Desk order: locate → classify → size market → momentum → capital → competition
   const data: CategoryMap = {
-    "Market Opportunity": marketOpportunity,
-    "Financial Intelligence": financialIntelligence,
-    "Growth Signals": growthSignals,
     "Geographic Intelligence": geographicIntelligence,
     "Sector Intelligence": sectorIntelligence,
+    "Market Opportunity": marketOpportunity,
+    "Growth Signals": growthSignals,
+    "Financial Intelligence": financialIntelligence,
     "Competitive Intelligence": competitiveIntelligence,
   };
 

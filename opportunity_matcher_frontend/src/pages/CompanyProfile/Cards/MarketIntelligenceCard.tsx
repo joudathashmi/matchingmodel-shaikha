@@ -330,13 +330,13 @@ const FilterBar = styled.div`
   }
 
   @media (min-width: ${BREAKPOINTS.LAPTOP}) {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
     margin-bottom: 1.75rem;
   }
 
   @media (min-width: ${BREAKPOINTS.DESKTOP}) {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.2rem;
     margin-bottom: 2rem;
   }
@@ -606,13 +606,34 @@ const StatusText = styled.p`
 
 const POLL_MS = 60_000;
 
+/** Stable desk order for company market brief filters. */
+const CATEGORY_ORDER = [
+  "Geographic Intelligence",
+  "Sector Intelligence",
+  "Market Opportunity",
+  "Growth Signals",
+  "Financial Intelligence",
+  "Competitive Intelligence",
+] as const;
+
+function orderedCategoryKeys(categories: { [category: string]: unknown } | null | undefined): string[] {
+  const keys = Object.keys(categories || {}).filter((k) => k !== "_meta");
+  const rank = new Map(CATEGORY_ORDER.map((name, i) => [name, i]));
+  return keys.sort((a, b) => {
+    const ai = rank.has(a) ? rank.get(a)! : 999;
+    const bi = rank.has(b) ? rank.get(b)! : 999;
+    if (ai !== bi) return ai - bi;
+    return a.localeCompare(b);
+  });
+}
+
 const MarketIntelligence: React.FC = () => {
   const dispatch = useDispatch();
   const categories = useSelector(selectMarketIntelligenceCategories);
   const meta = useSelector(selectMarketIntelligenceMeta) as MarketIntelligenceMeta | null;
   const loading = Boolean(useSelector(selectMarketIntelligenceLoading));
   const error = useSelector(selectMarketIntelligenceError) as string | null;
-  const categoryKeys = Object.keys(categories || {});
+  const categoryKeys = orderedCategoryKeys(categories);
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [refreshing, setRefreshing] = useState(false);
 
