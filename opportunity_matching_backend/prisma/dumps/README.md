@@ -1,21 +1,30 @@
 # Database schema dumps
 
-## Important: two local DB names existed historically
+## Source (active app DB only)
 
-| Database name | Notes |
-|---|---|
-| `matchmaking%20F` (literal `%20`) | **Active app DB** (`DATABASE_URL`). Has latest models. |
-| `matchmaking F` (space) | Legacy / accidental name. Was missing newer tables until 2026-08-10 sync. |
+These dumps are taken from the database the backend actually uses:
 
-Always dump from the DB Prisma reports via `SELECT current_database();`.
+- Prisma `SELECT current_database()` → `matchmaking%20F`
+- Confirmed tables include `AuditLog`, `MatchComment`, `AppSetting`
 
-## Latest schema-only dump
+Do **not** use dumps from the legacy DB named `matchmaking F` (space).
 
-- `latest_schema.sql` — schema from the active app database
+## Files
 
-Apply migrations instead when possible:
+- `active_app_schema.sql` — schema-only dump of the active app database
+- `latest_schema.sql` — same content (alias)
+
+## Apply on deploy
+
+Prefer migrations:
 
 ```bash
 cd opportunity_matching_backend
 npx prisma migrate deploy
+```
+
+Or restore schema-only:
+
+```bash
+psql "$DATABASE_URL" -f prisma/dumps/active_app_schema.sql
 ```
